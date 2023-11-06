@@ -1,0 +1,21 @@
+{
+  "particle": "mu",
+  "config": "conf2",
+  "min_charge": 0,
+  "min_theta": 0,
+  "max_theta": 180,
+  "min_phi": 0,
+  "max_phi": 360,
+  "cube_size": 10,
+  "img_size": 7,
+  "min_ke": 300,
+  "max_ke": 1000,
+  "source_range": [-1, 1],
+  "target_range": [-1, 1],
+  "dataset": "datasets/dataset_mu/event{}.npz",
+  "dataset_metadata": "datasets/metadata/dataset_mu_metadata.pkl",
+  "indices_path": "datasets/metadata/dataset_indices.pkl",
+  "log_path": "logs/gan_mu_conf1",
+  "save_path": "checkpoints/gan_mu_conf1",
+  "checkpoint_path": "checkpoints/gan_mu_conf2_weights.pth"
+}

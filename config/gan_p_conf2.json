@@ -1,0 +1,20 @@
+{
+  "particle": "p",
+  "config": "conf2",
+  "min_charge": 0,
+  "min_theta": 0,
+  "max_theta": 180,
+  "min_phi": 0,
+  "max_phi": 360,
+  "img_size": 7,
+  "min_ke": 0,
+  "max_ke": 60,
+  "source_range": [-1, 1],
+  "target_range": [-1, 1],
+  "dataset": "datasets/dataset_p/event{}.npz",
+  "dataset_metadata": "datasets/metadata/dataset_p_metadata.pkl",
+  "indices_path": "datasets/metadata/dataset_indices.pkl",
+  "log_path": "logs/gan_p_conf1",
+  "save_path": "checkpoints/gan_p_conf1",
+  "checkpoint_path": "checkpoints/gan_p_conf2_weights.pth"
+}

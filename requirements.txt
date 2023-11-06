@@ -1,0 +1,7 @@
+matplotlib==3.7.1
+numpy==1.23.5
+plotly==5.17.0
+pytorch_lightning==1.8.4.post0
+pytorch_lightning==1.9.3
+torch==2.0.0
+torch_optimizer==0.3.0
