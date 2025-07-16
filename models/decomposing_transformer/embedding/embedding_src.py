@@ -15,17 +15,16 @@ import torch.nn as nn
 
 # Source sequence embedding
 class EmbeddingSource(nn.Module):
-    def __init__(self, emb_size=512, img_size=7, dropout=0.1, device=None):
+    def __init__(self, emb_size=512, img_size=7, dropout=0.1):
         super().__init__()
-        self.vertex_token = nn.Parameter(torch.randn(1, 1))  # vertex token
-        self.token_type = torch.tensor([[0, 1, 2]]).long().to(device)  # token type
-        self.vertex_emb = nn.Linear(1, emb_size)  # embed vertex token
-        self.muon_emb = nn.Linear(6, emb_size)  # embed muon information
+        self.vertex_token = nn.Parameter(torch.randn(1, 1, emb_size))  # vertex token
+        self.register_buffer("token_type", torch.tensor([[0, 1, 2]], dtype=torch.long))
+        self.muon_emb = nn.Linear(7, emb_size)  # embed muon information
         self.embedding_charge = nn.Linear(1, emb_size)  # embed charge
         self.embedding_x = nn.Embedding(img_size, emb_size)  # embed coordinate X
         self.embedding_y = nn.Embedding(img_size, emb_size)  # embed coordinate Y
         self.embedding_z = nn.Embedding(img_size, emb_size)  # embed coordinate Z
-        self.embedding_token = nn.Embedding(3, emb_size)  # embed coordinate Z
+        self.embedding_token = nn.Embedding(3, emb_size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, indexes, charges, exit_muon):
@@ -41,11 +40,10 @@ class EmbeddingSource(nn.Module):
             src_emb (Tensor): Embedded source sequence.
         """
         # Token for vertex regression
-        vertex = self.vertex_token.repeat(1, indexes.size(1), 1)
-        vertex_emb = self.vertex_emb(vertex)
+        vertex_emb = self.vertex_token.repeat(1, indexes.size(1), 1)
 
         # Embedding of reconstructed exiting muon
-        exit_muon_emb = self.muon_emb(exit_muon.reshape(1, -1, 6))
+        exit_muon_emb = self.muon_emb(exit_muon)
 
         # Embedding of the particle images
         particles_emb = self.embedding_x(indexes[:, :, 0]) + self.embedding_y(indexes[:, :, 1]) + \

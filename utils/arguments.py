@@ -21,9 +21,13 @@ def args_transformer(version=1):
         argparse.ArgumentParser: An argument parser with options for configuring the Transformer model.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("-cp", "--config_path", type=str,
-                        default="config/decomposing_transformer_v{}.json".format(version),
-                        help="path of configuration file")
+    parser.add_argument("--dataset_path", type=str, default=None, help="path of dataset file")
+    parser.add_argument("--metadata_path", type=str, default=None, help="path of metadata file")
+    parser.add_argument("--seed", type=int, default=42, help="random seed")
+    parser.add_argument("--max_p", type=int, default=5, help="maximum number of protons")
+    parser.add_argument("--cube_size", type=float, default=10.27, help="cube size in mm")
+    parser.add_argument("--va_size", type=int, default=7, help="VA region size in cubes")
+    parser.add_argument("--pad_value", type=int, default=-10000, help="VA region size in cubes")
     parser.add_argument("-hs", "--hidden", type=int, default=192, help="hidden size of transformer model")
     parser.add_argument("-dr", "--dropout", type=float, default=0.1, help="dropout of the model")
     parser.add_argument("-el", "--encoder_layers", type=int, default=10, help="number of encoder layers")
@@ -33,14 +37,25 @@ def args_transformer(version=1):
     parser.add_argument("-e", "--epochs", type=int, default=12420, help="number of epochs")
     parser.add_argument("-w", "--num_workers", type=int, default=32, help="dataloader worker size")
     parser.add_argument("--lr", type=float, default=2e-3, help="learning rate of the optimiser")
-    parser.add_argument("-lrd", "--lr_decay", type=float, default=0.9, help="learning rate decay of the scheduler")
     parser.add_argument("-ag", "--accum_grad_batches", type=int, default=4, help="batches for gradient accumulation")
-    parser.add_argument("-st", "--scheduler_steps", type=int, default=400, help="scheduler steps in one cycle")
+    parser.add_argument("--cosine_annealing_steps", type=int, default=400, help="scheduler steps")
     parser.add_argument("-wd", "--weight_decay", type=float, default=1e-2, help="weight_decay of the optimiser")
     parser.add_argument("-b1", "--beta1", type=float, default=0.9, help="adam first beta value")
     parser.add_argument("-b2", "--beta2", type=float, default=0.999, help="adam second beta value")
     parser.add_argument("--eps", type=float, default=1e-9, help="value to prevent division by zero")
     parser.add_argument('-ws', '--warmup_steps', type=int, default=20, help='Maximum number of warmup steps')
+    parser.add_argument("--save_dir", type=str, default="logs", help="log save directory")
+    parser.add_argument("--name", type=str, default="v1", help="model name")
+    parser.add_argument("--log_every_n_steps", type=int, default=50, help="steps between logs")
+    parser.add_argument("--early_stop_patience", type=int, default=0, help="early stopping patience (0 means no early stopping)")
+    parser.add_argument("--save_top_k", type=int, default=1, help="save top k checkpoints")
+    parser.add_argument("--checkpoint_path", type=str, default="checkpoints", help="Checkpoint path")
+    parser.add_argument("--checkpoint_name", type=str, default="v1", help="checkpoint name")
+    parser.add_argument("--load_checkpoint", type=str, default=None, help="name of the checkpoint to load")
+    parser.add_argument('--gpus', nargs='*',  # 'nargs' can be '*' or '+' depending on your needs
+                        default=[0],  # Default list
+                        help='list of GPUs to use (more than 1 GPU will run the training in parallel)'
+                        )
 
     return parser
 
