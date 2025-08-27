@@ -73,8 +73,8 @@ def create_mask_src(src, pad_value, device):
     src_seq_len = src.shape[0] + 2
 
     src_mask = torch.zeros((src_seq_len, src_seq_len),device=device).type(torch.bool)
-    src_padding_mask = torch.zeros(size=(src.size(1), src.size(0)+1), dtype=torch.bool).to(device)
-    src_padding_mask[:, 1:] = (src[:, :, 0] == pad_value).transpose(0, 1)
+    src_padding_mask = torch.zeros(size=(src.size(1), src.size(0)+2), dtype=torch.bool).to(device)
+    src_padding_mask[:, 2:] = (src[:, :, 0] == pad_value).transpose(0, 1)
 
     src[src == pad_value] = 0
 
