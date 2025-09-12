@@ -19,10 +19,7 @@ class EmbeddingSource(nn.Module):
         super().__init__()
         self.vertex_token = nn.Parameter(torch.randn(1, 1, emb_size))  # vertex token
         self.register_buffer("token_type", torch.tensor([[0, 1, 2]], dtype=torch.long))
-        self.exiting_emb = nn.Linear(7, emb_size)  # embed exiting particle information
-
-        self.exit_type_emb = nn.Embedding(2, emb_size)  # embed exit type information
-
+        self.muon_emb = nn.Linear(7, emb_size)  # embed muon information
         self.embedding_charge = nn.Linear(1, emb_size)  # embed charge
         self.embedding_x = nn.Embedding(img_size, emb_size)  # embed coordinate X
         self.embedding_y = nn.Embedding(img_size, emb_size)  # embed coordinate Y
@@ -30,14 +27,14 @@ class EmbeddingSource(nn.Module):
         self.embedding_token = nn.Embedding(3, emb_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, indexes, charges, exit_particle):
+    def forward(self, indexes, charges, exit_muon):
         """
         Forward pass of the source sequence embedding.
 
         Args:
             indexes (Tensor): Indexes of hits.
             charges (Tensor): Charges (energy loss) of hits.
-            exit_particle (Tensor): Exiting particle information.
+            exit_muon (Tensor): Exiting muon information.
 
         Returns:
             src_emb (Tensor): Embedded source sequence.
@@ -45,20 +42,19 @@ class EmbeddingSource(nn.Module):
         # Token for vertex regression
         vertex_emb = self.vertex_token.repeat(1, indexes.size(1), 1)
 
-        # Embedding of reconstructed exiting particle
-        exit_particle_emb = self.exiting_emb(exit_particle[:,:, :7]) + self.exit_type_emb(exit_particle[:,:,7].long())
-        n_exit_particle_emb = exit_particle.shape[0]
+        # Embedding of reconstructed exiting muon
+        exit_muon_emb = self.muon_emb(exit_muon)
 
         # Embedding of the particle images
         particles_emb = self.embedding_x(indexes[:, :, 0]) + self.embedding_y(indexes[:, :, 1]) + \
                         self.embedding_z(indexes[:, :, 2]) + self.embedding_charge(charges)
 
         # Concatenate all the embeddings
-        src_emb = torch.cat((vertex_emb, exit_particle_emb, particles_emb), dim=0)
+        src_emb = torch.cat((vertex_emb, exit_muon_emb, particles_emb), dim=0)
 
         # Add token (type) embedding
         src_emb[0:1] += self.embedding_token(self.token_type[:, 0:1])
-        src_emb[1:1+n_exit_particle_emb] += self.embedding_token(self.token_type[:, 1:2])
-        src_emb[1+n_exit_particle_emb:] += self.embedding_token(self.token_type[:, 2:3])
+        src_emb[1:2] += self.embedding_token(self.token_type[:, 1:2])
+        src_emb[2:] += self.embedding_token(self.token_type[:, 2:3])
 
         return self.dropout(src_emb)

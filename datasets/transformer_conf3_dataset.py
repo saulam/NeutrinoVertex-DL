@@ -8,7 +8,7 @@ from torch.nn.utils.rnn import pad_sequence
 from utils import set_random_seed
 
 
-class VADataset(Dataset):
+class TransformerConf3Dataset(Dataset):
     def __init__(self, args, split='test'):
         with open(args.metadata_path, 'rb') as f:
             self.metadata = pkl.load(f)
@@ -17,9 +17,10 @@ class VADataset(Dataset):
         self.dataset_path = args.dataset_path
         self.event_in_folder = args.event_in_folder
         self.lookup_tables = self.metadata['lookup_tables']
-        self.lookup_keys = list(self.lookup_tables['proton'].keys())
+        self.lookup_keys = list(self.lookup_tables['proton_contained'].keys())
         self.statistics = self.metadata['statistics']
-        self.max_p = args.max_p
+        self.max_p_contained = args.max_p_contained
+        self.max_p_exiting = args.max_p_exiting
         self.split = split
         self.total_events = self.__len__()
         self.cube_shift = 1
@@ -28,8 +29,10 @@ class VADataset(Dataset):
         self.pad_value = args.pad_value
 
         # max number of protons for val and test sets
-        self.p_val = np.random.randint(1, self.max_p + 1, self.total_events)
-        self.p_test = np.random.randint(1, self.max_p + 1, self.total_events)
+        self.p_contained_val = np.random.randint(1, self.max_p_contained + 1, self.total_events)
+        self.p_exiting_val = np.random.randint(0, self.max_p_exiting + 1, self.total_events)
+        self.p_contained_test = np.random.randint(1, self.max_p_contained + 1, self.total_events)
+        self.p_exiting_test = np.random.randint(0, self.max_p_exiting + 1, self.total_events)
 
         # Shuffle all the lists (particles starting from the same position) in the dictionary
         for particle in self.lookup_tables.keys():
@@ -42,59 +45,68 @@ class VADataset(Dataset):
     def __getitem__(self, idx):
         while True:
             lookup_key = self.lookup_keys[idx]
-            cand_p  = self.lookup_tables['proton'][lookup_key]
+            cand_p_contained  = self.lookup_tables['proton_contained'][lookup_key]
+            cand_p_exiting = self.lookup_tables['proton_exiting'][lookup_key]
             cand_mu = self.lookup_tables['muon'][lookup_key]
     
             # check your minimum requirements, otherwise pick a new random idx
-            if len(cand_p) >= 20 and len(cand_mu) >= 10:
+            if len(cand_p_contained) >= 20 and len(cand_p_exiting) >= 10 and len(cand_mu) >= 10:
                 break
     
             idx = random.randint(0, self.total_events - 1)
 
-        cands = {'muon': [], 'proton': []}
+        cands = {'muon': [], 'proton_contained': [], 'proton_exiting': []}
         if self.split == "train":
-            # First K candidate protons are for training: randomly select 1 to max_p random candidates
-            cand_p = cand_p[:-(self.p_val[idx] + self.p_test[idx])]
-            cand_p = random.sample(cand_p, random.randint(1, min(self.max_p, len(cand_p))))
+            # First K candidate contained protons are for training: randomly select 1 to max_p_contained random candidates
+            cand_p_contained = cand_p_contained[:-(self.p_contained_val[idx] + self.p_contained_test[idx])]
+            cand_p_contained = random.sample(cand_p_contained, random.randint(1, min(self.max_p_contained, len(cand_p_contained))))
+            # First K candidate exiting protons are for training: randomly select 1 to max_p_exiting random candidates
+            cand_p_exiting = cand_p_exiting[:-(self.p_exiting_val[idx] + self.p_exiting_test[idx])]
+            cand_p_exiting = random.sample(cand_p_exiting, random.randint(0, min(self.max_p_exiting, len(cand_p_exiting))))
             # All muons expect the last two are for training: randomly select 1 candidate
             cand_mu = cand_mu[:-2]
             cand_mu = random.sample(cand_mu, 1)
         elif self.split == "val":
             set_random_seed(idx, random=random, numpy=np)  # for reproducibility
-            # Next fixed 1 to max_p candidates are for validation
-            cand_p = cand_p[-(self.p_val[idx] + self.p_test[idx]):-self.p_test[idx]]
+            # Next fixed 1 to max_p_contained candidates are for validation
+            cand_p_contained = cand_p_contained[-(self.p_contained_val[idx] + self.p_contained_test[idx]):-self.p_contained_test[idx]]
+            cand_p_exiting = cand_p_exiting[-(self.p_exiting_val[idx] + self.p_exiting_test[idx]):-self.p_exiting_test[idx]]
             # Next muon is for validation
             cand_mu = cand_mu[-2:-1]
         else:
             set_random_seed(idx, random=random, numpy=np)  # for reproducibility
-            # Last fixed 1 to max_p candidates are for test
-            cand_p = cand_p[-self.p_test[idx]:]
+            # Last fixed 1 to max_p_contained candidates are for test
+            cand_p_contained = cand_p_contained[-self.p_contained_test[idx]:]
+            cand_p_exiting = cand_p_exiting[-self.p_exiting_test[idx]:]
             # Last muon is for test
             cand_mu = cand_mu[-1:]
         
         cands['muon'].extend(cand_mu)
-        cands['proton'].extend(cand_p)
+        cands['proton_contained'].extend(cand_p_contained)
+        cands['proton_exiting'].extend(cand_p_exiting)
 
         # Retrieve the particle candidates
-        particles = {'exiting': [], 'contained': []}
+        particles = {'exiting': [], 'proton_contained': []}
         for particle, cand in cands.items():
             for cand_id in cand:
                 folder_index = cand_id // self.event_in_folder
                 paths = glob(self.dataset_path.format(particle, folder_index, cand_id))
                 assert len(paths) == 1
                 loaded_cand = np.load(paths[0])  # load particle
-                if particle == 'muon':
+                if particle == 'muon' or particle == 'proton_exiting':
                     particles['exiting'].append(loaded_cand)
-                else:
-                    particles['contained'].append(loaded_cand)
-
+                elif particle == 'proton_contained':
+                    particles['proton_contained'].append(loaded_cand)
+                
         # Random shift (same for all the particles)
         shift = np.random.randint(-self.cube_shift, self.cube_shift + 1, 3)
 
         # Prepare event
         output = {
             'exiting': {
+
                 'nb_particles': len(particles['exiting']),
+                'particle_type': np.zeros(shape=(len(particles['exiting']),)),
                 'images': np.zeros(shape=(len(particles['exiting']), self.va_size, self.va_size, self.va_size)),
                 'iniekins': np.zeros(shape=(len(particles['exiting']),)),
                 'inidirs': np.zeros(shape=(len(particles['exiting']), 3)),
@@ -102,15 +114,17 @@ class VADataset(Dataset):
                 'exitpos': np.zeros(shape=(len(particles['exiting']), 3)),
                 'lens': np.zeros(shape=(len(particles['exiting']),)),
             },
-             'contained': {
-                'nb_particles': len(particles['contained']),
-                'images': np.zeros(shape=(len(particles['contained']), self.va_size, self.va_size, self.va_size)),
-                'iniekins': np.zeros(shape=(len(particles['contained']),)),
-                'inidirs': np.zeros(shape=(len(particles['contained']), 3)),
-                'inipos': np.zeros(shape=(len(particles['contained']), 3)),
-                'lens': np.zeros(shape=(len(particles['contained']),)),
+
+            'proton_contained': {
+                'nb_particles': len(particles['proton_contained']),
+                'images': np.zeros(shape=(len(particles['proton_contained']), self.va_size, self.va_size, self.va_size)),
+                'iniekins': np.zeros(shape=(len(particles['proton_contained']),)),
+                'inidirs': np.zeros(shape=(len(particles['proton_contained']), 3)),
+                'inipos': np.zeros(shape=(len(particles['proton_contained']), 3)),
+                'lens': np.zeros(shape=(len(particles['proton_contained']),)),
             },
-            'nb_particles': len(particles['exiting']) + len(particles['contained']),
+
+            'nb_particles': len(particles['exiting']) + len(particles['proton_contained']),
             'va_image': np.zeros(shape=(self.va_size, self.va_size, self.va_size)),
             'vertex_pos': np.zeros(shape=(3,)),
         }
@@ -118,6 +132,7 @@ class VADataset(Dataset):
         max_extend = self.va_size//2
         for key in particles.keys():
             for i, data in enumerate(particles[key]):
+                particle_type = data['particle_type'].astype(int)
                 hit_x = data['recon_sfg_hitposx_rel']
                 hit_y = data['recon_sfg_hitposy_rel']
                 hit_z = data['recon_sfg_hitposz_rel']
@@ -139,7 +154,8 @@ class VADataset(Dataset):
                     assert recon_exit_tag == 1
                     # calculate exiting point
                     output[key]['exitpos'][i] = self.calc_exit_point(pos_ini_mod_shifted, inidir)
-    
+                    output[key]['particle_type'][i] = particle_type
+
                 mask = (
                       (hit_x_shifted >= -max_extend) & (hit_x_shifted <= max_extend)
                     & (hit_y_shifted >= -max_extend) & (hit_y_shifted <= max_extend)
@@ -163,20 +179,23 @@ class VADataset(Dataset):
         for key in output['exiting'].keys():
             if key != 'nb_particles':
                 output['exiting'][key] = output['exiting'][key][order]
-        order = output['contained']['iniekins'].argsort()[::-1]
-        for key in output['contained'].keys():
+        order = output['proton_contained']['iniekins'].argsort()[::-1]
+        for key in output['proton_contained'].keys():
             if key != 'nb_particles':
-                output['contained'][key] = output['contained'][key][order]
+                output['proton_contained'][key] = output['proton_contained'][key][order]
 
         output['va_image']= np.column_stack((np.argwhere(output['va_image']), output['va_image'][output['va_image'] != 0]))
-        output['iniekins'] = output['contained']['iniekins']
-        output['inidirs'] = output['contained']['inidirs']
+        output['iniekins'] = output['proton_contained']['iniekins']
+        output['inidirs'] = output['proton_contained']['inidirs']
         output['exit_info'] = np.concatenate(
-            (output['exiting']['iniekins'].reshape(-1, 1), output['exiting']['exitpos'], output['exiting']['inidirs']),
+            (output['exiting']['iniekins'].reshape(-1, 1), 
+            output['exiting']['exitpos'], 
+            output['exiting']['inidirs'], 
+            output['exiting']['particle_type'].reshape(-1, 1)),
             axis=1
         )
         if self.split != 'test':
-            del output['exiting'], output['contained']
+            del output['exiting'], output['proton_contained']
 
         self.preprocess(output)
 
@@ -233,13 +252,21 @@ class VADataset(Dataset):
 
 
     def preprocess(self, output):
-        output['va_image'][:, 3] /= self.metadata['statistics']['per_tree']['proton']['recon_charge']['std']
-        output['exit_info'][:, 0] -= self.metadata['statistics']['per_tree']['muon']['true_iniekin']['mean']
-        output['exit_info'][:, 0] /= self.metadata['statistics']['per_tree']['muon']['true_iniekin']['std']
+        output['va_image'][:, 3] /= self.metadata['statistics']['per_tree']['proton_contained']['recon_charge']['std']
+
+        for i in range(output['exit_info'].shape[0]):
+            # for exiting muon:
+            if output['exit_info'][i, 7] == 1:
+                output['exit_info'][i, 0] -= self.metadata['statistics']['per_tree']['muon']['true_iniekin']['mean']
+                output['exit_info'][i, 0] /= self.metadata['statistics']['per_tree']['muon']['true_iniekin']['std']
+            # for exiting proton:
+            else:
+                output['exit_info'][i, 0] -= self.metadata['statistics']['per_tree']['proton_exiting']['true_iniekin']['mean']
+                output['exit_info'][i, 0] /= self.metadata['statistics']['per_tree']['proton_exiting']['true_iniekin']['std']
         output['exit_info'][:, 1:4] /= (self.cube_size * 3.5)
         output['vertex_pos'] /= (self.cube_size * 1.5)
-        output['iniekins'] -= self.metadata['statistics']['per_tree']['proton']['true_iniekin']['mean']
-        output['iniekins'] /= self.metadata['statistics']['per_tree']['proton']['true_iniekin']['std']
+        output['iniekins'] -= self.metadata['statistics']['per_tree']['proton_contained']['true_iniekin']['mean']
+        output['iniekins'] /= self.metadata['statistics']['per_tree']['proton_contained']['true_iniekin']['std']
 
         output['va_image'] = torch.from_numpy(output['va_image'])
         output['exit_info'] = torch.from_numpy(output['exit_info'])

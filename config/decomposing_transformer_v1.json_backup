@@ -1,5 +1,5 @@
 {
-  "cube_size": 10.27,
+  "cube_size": 10,
   "min_theta": 0,
   "max_theta": 180,
   "min_phi": 0,
@@ -16,8 +16,8 @@
   "target_range": [0, 1],
   "target_size": 3,
   "random_seed": 7,
-  "dataset_p": "/mnt/c/Users/btaol/Work/T2K_BL/Vertex_Activity/Data/Highland_Output/NN_Data/proton/{}/{}.npz",
-  "dataset_mu": "/mnt/c/Users/btaol/Work/T2K_BL/Vertex_Activity/Data/Highland_Output/NN_Data/muon/{}/{}.npz",
+  "dataset_p": "datasets/dataset_p/event{}.npz",
+  "dataset_mu": "datasets/dataset_mu/event{}.npz",
   "dataset_p_metadata": "datasets/metadata/dataset_p_metadata.pkl",
   "dataset_mu_metadata": "datasets/metadata/dataset_mu_metadata.pkl",
   "pad_value": -2,
