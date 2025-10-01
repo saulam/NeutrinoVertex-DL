@@ -39,8 +39,8 @@ class LightningModelGAN(pl.LightningModule):
 
         Note: This method is used to address an issue related to parameter groups in PyTorch Lightning.
         """
-        self.optimizers()[0].param_groups = self.optimizers()[0]._optimizer.param_groups
-        self.optimizers()[1].param_groups = self.optimizers()[1]._optimizer.param_groups
+        # self.optimizers()[0].param_groups = self.optimizers()[0]._optimizer.param_groups
+        # self.optimizers()[1].param_groups = self.optimizers()[1]._optimizer.param_groups
 
     def forward(self, labels, z):
         """

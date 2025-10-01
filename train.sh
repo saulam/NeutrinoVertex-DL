@@ -1,31 +1,31 @@
 #!/bin/bash
 
 # Default arguments
-metadata_path="/mnt/c/Users/btaol/Work/T2K_BL/Vertex_Activity/Data/Highland_Output/NN_Data/metadata.pkl"
-dataset_path="/mnt/c/Users/btaol/Work/T2K_BL/Vertex_Activity/Data/Highland_Output/NN_Data/{}/{}/{}.npz"
+metadata_path="/scratch/libota/sfgd_va_nn_data/NN_Data/metadata.pkl"
+dataset_path="/scratch/libota/sfgd_va_nn_data/NN_Data/{}/{}/{}.npz"
 eps=1e-12
 #batch_size=2048
 #epochs=10000
 #num_workers=32
-batch_size=32
-epochs=4000
-num_workers=8
+batch_size=1024
+epochs=10000
+num_workers=32
 lr=1e-4
-accum_grad_batches=2
+accum_grad_batches=4
 
 #warmup_steps=100
 #cosine_annealing_steps=9900
 warmup_steps=100
-cosine_annealing_steps=2000
+cosine_annealing_steps=9900
 
 weight_decay=0.05
 beta1=0.9
 beta2=0.95
-save_dir="/mnt/c/Users/btaol/Work/T2K_BL/Vertex_Activity/Results/"
+save_dir="/scratch2/libota/SFGD_Vertex_Activity/Results/"
 name="v3"
 log_every_n_steps=400
 save_top_k=5
-checkpoint_path="/mnt/c/Users/btaol/Work/T2K_BL/Vertex_Activity/Results/checkpoints"
+checkpoint_path="/scratch2/libota/SFGD_Vertex_Activity/Results/checkpoints"
 checkpoint_name="v3"
 early_stop_patience=1000
 gpus=(0)

@@ -11,58 +11,62 @@ import numpy as np
 import pickle as pk
 import torch
 from torch.utils.data import Dataset
+import random
+import bisect
+from glob import glob
 
 
 class GANDataset(Dataset):
 
-    def __init__(self, config: dict, split: str = "train"):
+    def __init__(self, args, split: str = "train"):
         """
         Dataset initialiser.
 
         Args:
-            config (dict): Dictionary with JSON configuration entries.
             split (str): String indicating the purpose of the dataset ("train", "val", "test").
 
         Returns:
             None
         """
-        with open(config["dataset_metadata"], "rb") as fd:
-            charge, ini_pos, _, _, _, _, _ = pk.load(fd)
-        with open(config["indices_path"], "rb") as fd:
-            indices = pk.load(fd)
+        with open(args.metadata_path, "rb") as fd:
+            self.metadata = pk.load(fd)
+        with open(args.gan_ind_path, "rb") as fd:
+            self.gan_ind = pk.load(fd)
 
-        self.particle = config["particle"]  # particle type ("p", "mu", "D", or "T")
-        self.config = config["config"]  # first or seconf configuration
-        indices = indices["indices_{}_{}".format(self.particle, self.config)]  # file id
-        self.indices = indices["{}_indices".format(split)]  # file id
-        self.dataset = config["dataset"]  # proton dataset path
-        self.img_size = config["img_size"]  # img_size x img_size x img_size
-        self.min_charge = config["min_charge"]  # min charge (energy loss) per cube
-        self.max_charge = charge.max()  # max charge per cube
-        self.min_pos = ini_pos.min()  # min initial particle 1D position
-        self.max_pos = ini_pos.max()  # max initial particle 1D position
-        self.min_ke = config["min_ke"]  # min initial proton kinetic energy
-        self.max_ke = config["max_ke"]  # max initial proton kinetic energy
-        self.min_theta = config["min_theta"]  # min theta (in degrees)
-        self.max_theta = config["max_theta"]  # max theta (in degrees)
-        self.min_phi = config["min_phi"]  # min phi (in degrees)
-        self.max_phi = config["max_phi"]  # max phi (in degrees)
-        self.source_range = config["source_range"]  # range for input values
-        self.target_range = config["target_range"]  # range for target values
-        self.total_events = len(self.indices)  # total number of different particles
-        if self.particle == "mu":
-            self.cube_size = config["cube_size"]  # cube (voxel) size in mm (one side)
-            self.min_exit_pos_mu = -(self.cube_size * self.img_size) / 2.  # min muon exiting 1D position
-            self.max_exit_pos_mu = (self.cube_size * self.img_size) / 2.  # max muon exiting 1D position
+        self.particle = args.particle
+        self.lookup_tables = self.gan_ind[self.particle]
+        self.lookup_keys = list(self.lookup_tables.keys())
+        self.lookup_keys.sort()
+
+        self.split = split
+        self.dataset_path = args.dataset_path
+        self.va_size = args.va_size
+        self.img_size = args.img_size
+        self.cube_size = args.cube_size  # cube (voxel) size in mm (one side)
+        self.pad_value = args.pad_value
+
+
+        for key in self.lookup_tables.keys():
+            random.shuffle(self.lookup_tables[key])
+
+        self.values = [self.lookup_tables[k] for k in self.lookup_keys]
+        self.lens = [len(v) for v in self.values]
+
+        # Build cumulative end indices: [len(A), len(A)+len(B), ...]
+        self.cums = []
+        total = 0
+        for L in self.lens:
+            total += L
+            self.cums.append(total)
+        
+        self.total_events = self.__len__() # total number of different particles
+
+
 
     def __len__(self):
-        """
-        Returns the total number of events in the dataset.
+        return self.cums[-1] if self.cums else 0
 
-        Returns:
-            int: Total number of events in the dataset.
-        """
-        return self.total_events
+
 
     def collate_fn(self, batch):
         """
@@ -75,12 +79,12 @@ class GANDataset(Dataset):
             tuple: A tuple containing two tensors - image batch and parameters batch.
         """
         img_batch = np.array([event['image'] for event in batch if event['image'] is not None])
-        if self.particle == "mu":
+        if self.particle == "mu" or self.particle == "proton_exiting":
             params_batch = np.array([np.concatenate([event['pos_ini'], event['pos_exit'],
-                                                     event['ke_exit'], event['theta_exit'], event['phi_exit']])
+                                                     event['ke'], event['dir_ini']])
                                      for event in batch if event['pos_ini'] is not None])
         else:
-            params_batch = np.array([np.concatenate([event['pos_ini'], event['ke'], event['theta'], event['phi']])
+            params_batch = np.array([np.concatenate([event['pos_ini'], event['ke'], event['dir_ini']])
                                      for event in batch if event['pos_ini'] is not None])
         img_batch = torch.tensor(img_batch).float()
         params_batch = torch.tensor(params_batch).float()
@@ -97,70 +101,132 @@ class GANDataset(Dataset):
         Returns:
             dict: A dictionary containing information about the particle image and kinematics.
         """
-        # Retrieve particle data
-        index = self.indices[idx]
-        filepath = self.dataset.format(index)
-        particle = np.load(filepath)
+        # Support negative indices like a normal sequence
+        if idx < 0:
+            idx = len(self) + idx
+        if idx < 0 or idx >= len(self):
+            raise IndexError(idx)
 
-        # Retrieve input
-        hits = particle['sparse_image'].astype(int)  # array of shape (Nx5) [points vs (x, y, z, charge, tag)]
-        pos_ini = particle['pos_ini']  # array with initial position (x1, y1, z1)
-        ke = particle['ke']  # kinetic energy
-        theta, phi = particle['theta'], particle['phi']  # theta and phi (spherical coordinates)
+        # Find which sub-list this global index falls into
+        j = bisect.bisect_right(self.cums, idx)  # 0..len(keys)-1
+        prev_end = self.cums[j-1] if j > 0 else 0
+        local_idx = idx - prev_end
 
-        if hits.shape[0] == 0:
-            del particle
+        paths = glob(self.dataset_path.format(self.particle, self.lookup_keys[j], local_idx))
+        assert len(paths) == 1
+        loaded_cand = np.load(paths[0])  # load particle
+
+        max_extend = self.va_size//2
+
+        hit_x = loaded_cand['recon_sfg_hitposx_rel']
+        hit_y = loaded_cand['recon_sfg_hitposy_rel']
+        hit_z = loaded_cand['recon_sfg_hitposz_rel']
+        hit_q = loaded_cand['recon_sfg_charge']
+        pos_ini_mod = loaded_cand['true_inipos_mod'] - (self.cube_size / 2.0)
+        pos_ini = loaded_cand['true_inipos']
+        pos_end = loaded_cand['true_endpos']
+        length = np.linalg.norm(pos_end - pos_ini)
+        iniekin = loaded_cand['true_iniekin']
+        inidir = loaded_cand['true_inidir']
+        recon_exit_tag = loaded_cand['recon_exit_tag']
+
+        hit_x_ind = hit_x + max_extend
+        hit_y_ind = hit_y + max_extend
+        hit_z_ind = hit_z + max_extend
+
+        if hit_x.shape[0] == 0:
+            del loaded_cand
             return {'image': None,
                     'pos_ini': None,
                     'ke': None,
-                    'theta': None,
-                    'phi': None}
+                    'dir': None}
 
-        # Reconstruct the image to a (self.img_size-2)x(self.img_size-2)x(self.img_size-2) flat volume
-        dense_image = np.zeros(shape=(self.img_size + 2, self.img_size + 2, self.img_size + 2))
-        dense_image[hits[:, 0], hits[:, 1], hits[:, 2]] = hits[:, 3]
-        dense_image = dense_image[2:-2, 2:-2, 2:-2]
-        dense_image = dense_image.reshape(-1)
+        # Prepare particle
+        output = {
+            'image': np.zeros(shape=(self.img_size, self.img_size, self.img_size)),
+            'pos_ini': np.zeros(shape=(3,)),
+            'ke': np.zeros(shape=(1,)),
+            'dir_ini': np.zeros(shape=(3,))
+        }
+        if self.particle == "mu" or self.particle == "proton_exiting":
+            output['pos_exit'] = np.zeros(shape=(3,))
 
-        # Rescale values of particle image and kinematics
-        dense_image = np.interp(dense_image.ravel(), (self.min_charge, self.max_charge),
-                                self.target_range).reshape(dense_image.shape)
-        pos_ini = np.interp(pos_ini.ravel(), (self.min_pos, self.max_pos), self.source_range).reshape(pos_ini.shape)
-        if self.particle == "mu":
-            # Exiting reconstructed kinematics on outer
-            ke_exit = particle['ke_exit']
-            theta_exit = particle['theta_exit']
-            phi_exit = particle['phi_exit']
-            pos_exit = particle['pos_exit']
-            # Rescale
-            pos_exit = np.interp(pos_exit.ravel(), (self.min_exit_pos_mu, self.max_exit_pos_mu),
-                                 self.source_range).reshape(pos_exit.shape)
-            pos_exit /= np.abs(pos_exit).max()
-            ke_exit = np.interp(ke_exit, (self.min_ke, self.max_ke), self.source_range).reshape(1)
-            theta_exit = np.interp(theta_exit, (self.min_theta, self.max_theta), self.source_range).reshape(1)
-            phi_exit = np.interp(phi_exit, (self.min_phi, self.max_phi), self.source_range).reshape(1)
+        # Reconstruct the image to a (self.va_size-2)x(self.va_size-2)x(self.va_size-2) flat volume
+        dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
+        dense_image[hit_x_ind[:], hit_y_ind[:], hit_z_ind[:]] = hit_q[:]
+        output['image'] = dense_image[self.img_size//2:-self.img_size//2, self.img_size//2:-self.img_size//2, self.img_size//2:-self.img_size//2]
+        output['pos_ini'] = pos_ini
+        output['ke'] = iniekin
+        output['dir_ini'] = inidir
+        if self.particle == "mu" or self.particle == "proton_exiting":
+            output['pos_exit'] = self.calc_exit_point(pos_ini, inidir)
 
-        else:
-            ke = np.interp(ke, (self.min_ke, self.max_ke), self.source_range).reshape(1)
-            theta = np.interp(theta, (self.min_theta, self.max_theta), self.source_range).reshape(1)
-            phi = np.interp(phi, (self.min_phi, self.max_phi), self.source_range).reshape(1)
+        self.preprocess(self.particle, output)
 
-        del particle
+        del loaded_cand
 
-        # Create a dictionary with the information of the particle
-        if self.particle == "mu":
-            particle = {'image': dense_image,
-                        'pos_ini': pos_ini,
-                        'pos_exit': pos_exit,
-                        'ke_exit': ke_exit,
-                        'theta_exit': theta_exit,
-                        'phi_exit': phi_exit}
-        else:
-            particle = {'image': dense_image,
-                        'pos_ini': pos_ini,
-                        'ke': ke,
-                        'theta': theta,
-                        'phi': phi
-                        }
+        return output
 
-        return particle
+    def calc_exit_point(
+        self,
+        start_point: np.ndarray,
+        direction: np.ndarray) -> np.ndarray:
+        """
+        Compute the exit point of a ray from a self.va_size^3 cube grid centered at the origin.
+    
+        Parameters
+        ----------
+        start_point : np.ndarray, shape (3,)
+            A point inside the volume.
+        direction : np.ndarray, shape (3,)
+            Track direction.
+    
+        Returns
+        -------
+        exit_pt : np.ndarray, shape (3,)
+            The 3D coordinates where the ray exits the box.
+        """
+        half_span = (self.cube_size * self.va_size) / 2.0
+        mins = np.full(3, -half_span)
+        maxs = np.full(3,  half_span)
+        
+        if np.any(start_point < mins) or np.any(start_point > maxs):
+            raise ValueError(f"start_point {start_point} is outside the volume [{mins}, {maxs}].")
+
+        # calculate candidate "times"
+        t_exits = []
+        for i in range(3):
+            d = direction[i]
+            if d > 0:
+                t = (maxs[i] - start_point[i]) / d
+                t_exits.append(t)
+            elif d < 0:
+                t = (mins[i] - start_point[i]) / d
+                t_exits.append(t)
+            else:
+                t_exits.append(np.inf)
+    
+        t_exits = np.array(t_exits)
+        t_pos = t_exits[t_exits > 0]
+        if t_pos.size == 0:
+            raise RuntimeError("Ray does not exit the box (direction may be degenerate).")
+        t_exit = t_pos.min()
+    
+        exit_pt = start_point + t_exit * direction
+        return exit_pt
+
+
+    def preprocess(self, particle, output):
+        output['image'][:, 3] /= self.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
+        output['ke'] -= self.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
+        output['ke'] /= self.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
+        output['pos_ini'] /= (self.cube_size * 1.5)
+        if particle == "mu" or particle == "proton_exiting":
+            output['pos_exit'] /= (self.cube_size * 3.5)
+        
+        output['image'] = torch.from_numpy(output['image'])
+        output['pos_ini'] = torch.from_numpy(output['pos_ini'])
+        output['ke'] = torch.from_numpy(output['ke'])
+        output['dir_ini'] = torch.from_numpy(output['dir_ini'])
+        if particle == "mu" or particle == "proton_exiting":
+            output['pos_exit'] = torch.from_numpy(output['pos_exit'])

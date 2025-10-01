@@ -77,7 +77,10 @@ class TransformerConf3Dataset(Dataset):
             set_random_seed(idx, random=random, numpy=np)  # for reproducibility
             # Last fixed 1 to max_p_contained candidates are for test
             cand_p_contained = cand_p_contained[-self.p_contained_test[idx]:]
-            cand_p_exiting = cand_p_exiting[-self.p_exiting_test[idx]:]
+            if self.p_exiting_test[idx] > 0:
+                cand_p_exiting = cand_p_exiting[-self.p_exiting_test[idx]:]
+            else:
+                cand_p_exiting = []
             # Last muon is for test
             cand_mu = cand_mu[-1:]
         
@@ -128,6 +131,7 @@ class TransformerConf3Dataset(Dataset):
             'va_image': np.zeros(shape=(self.va_size, self.va_size, self.va_size)),
             'vertex_pos': np.zeros(shape=(3,)),
         }
+
 
         max_extend = self.va_size//2
         for key in particles.keys():
@@ -279,7 +283,8 @@ class TransformerConf3Dataset(Dataset):
         img_batch, exit_batch, vertex_batch, ekins_batch, dirs_batch, isnext_batch = [], [], [], [], [], []
 
         if self.split == "test":
-            test_images = []
+            test_images_exit = []
+            test_images_contained = []
 
         for event in batch:
             va_image = event['va_image']
@@ -301,6 +306,10 @@ class TransformerConf3Dataset(Dataset):
             dirs_batch.append(inidirs)
             isnext_batch.append(is_next)
 
+            if self.split == "test":
+                test_images_exit.append(event['exiting']['images'])
+                test_images_contained.append(event['proton_contained']['images'])
+
         assert len(img_batch) > 0
 
         # Convert lists to torch tensors and pad sequences
@@ -311,4 +320,6 @@ class TransformerConf3Dataset(Dataset):
         dirs_batch = pad_sequence(dirs_batch, padding_value=self.pad_value).float()
         isnext_batch = pad_sequence(isnext_batch, padding_value=self.pad_value).float()
 
+        if self.split == "test":
+            return img_batch, exit_batch, vertex_batch, ekins_batch, dirs_batch, isnext_batch, test_images_exit, test_images_contained
         return img_batch, exit_batch, vertex_batch, ekins_batch, dirs_batch, isnext_batch
