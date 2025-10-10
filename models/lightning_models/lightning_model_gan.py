@@ -124,7 +124,7 @@ class LightningModelGAN(pl.LightningModule):
         optimizer_c, optimizer_g = self.optimizers()
 
         # Train critic
-        self.toggle_optimizer(optimizer_c, 0)
+        self.toggle_optimizer(optimizer_c)
         optimizer_c.zero_grad()
         mean_w_loss, mean_c_loss_real, mean_c_loss_fake = 0, 0, 0
         for _ in range(self.crit_repeats):
@@ -138,7 +138,7 @@ class LightningModelGAN(pl.LightningModule):
         self.untoggle_optimizer(optimizer_c)
 
         # Train generator
-        self.toggle_optimizer(optimizer_g, 1)
+        self.toggle_optimizer(optimizer_g)
         optimizer_g.zero_grad()
         self.generator_train_step(optimizer_g, batch_size, real_data, labels)
         self.untoggle_optimizer(optimizer_g)

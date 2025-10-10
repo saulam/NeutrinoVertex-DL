@@ -110,9 +110,10 @@ class GANDataset(Dataset):
         # Find which sub-list this global index falls into
         j = bisect.bisect_right(self.cums, idx)  # 0..len(keys)-1
         prev_end = self.cums[j-1] if j > 0 else 0
-        local_idx = idx - prev_end
-
+        local_idx = idx
+        #print("path: ", self.dataset_path.format(self.particle, self.lookup_keys[j], local_idx))
         paths = glob(self.dataset_path.format(self.particle, self.lookup_keys[j], local_idx))
+        #print("paths: ", paths)
         assert len(paths) == 1
         loaded_cand = np.load(paths[0])  # load particle
 
@@ -130,9 +131,24 @@ class GANDataset(Dataset):
         inidir = loaded_cand['true_inidir']
         recon_exit_tag = loaded_cand['recon_exit_tag']
 
-        hit_x_ind = hit_x + max_extend
-        hit_y_ind = hit_y + max_extend
-        hit_z_ind = hit_z + max_extend
+        # print("hit_x: ", hit_x	)
+        # print("hit_y: ", hit_y)
+        # print("hit_z: ", hit_z)
+        # print("hit_q: ", hit_q)
+        # print("pos_ini_mod: ", pos_ini_mod)
+        # print("pos_ini: ", pos_ini)
+        # print("pos_end: ", pos_end)
+
+        mask = (
+                  (hit_x >= -max_extend) & (hit_x <= max_extend)
+                & (hit_y >= -max_extend) & (hit_y <= max_extend)
+                & (hit_z >= -max_extend) & (hit_z <= max_extend)
+                )
+
+        hit_x_ind = hit_x[mask] + max_extend
+        hit_y_ind = hit_y[mask] + max_extend
+        hit_z_ind = hit_z[mask] + max_extend
+        hit_q_val = hit_q[mask]
 
         if hit_x.shape[0] == 0:
             del loaded_cand
@@ -153,13 +169,14 @@ class GANDataset(Dataset):
 
         # Reconstruct the image to a (self.va_size-2)x(self.va_size-2)x(self.va_size-2) flat volume
         dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
-        dense_image[hit_x_ind[:], hit_y_ind[:], hit_z_ind[:]] = hit_q[:]
-        output['image'] = dense_image[self.img_size//2:-self.img_size//2, self.img_size//2:-self.img_size//2, self.img_size//2:-self.img_size//2]
-        output['pos_ini'] = pos_ini
-        output['ke'] = iniekin
+        dense_image[hit_x_ind[:], hit_y_ind[:], hit_z_ind[:]] = hit_q_val[:]
+        boundary_size = self.va_size//2 - self.img_size//2
+        output['image'] = dense_image[boundary_size:-boundary_size, boundary_size:-boundary_size, boundary_size:-boundary_size].reshape(-1)
+        output['pos_ini'] = pos_ini_mod
+        output['ke'] = np.array([iniekin])
         output['dir_ini'] = inidir
         if self.particle == "mu" or self.particle == "proton_exiting":
-            output['pos_exit'] = self.calc_exit_point(pos_ini, inidir)
+            output['pos_exit'] = self.calc_exit_point(pos_ini_mod, inidir)
 
         self.preprocess(self.particle, output)
 
@@ -217,7 +234,7 @@ class GANDataset(Dataset):
 
 
     def preprocess(self, particle, output):
-        output['image'][:, 3] /= self.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
+        output['image'] /= self.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
         output['ke'] -= self.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
         output['ke'] /= self.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
         output['pos_ini'] /= (self.cube_size * 1.5)

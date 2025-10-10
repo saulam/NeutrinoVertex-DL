@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from utils import set_random_seed
 from zipfile import ZipFile
+import io
 
 
 class TransformerConf3Dataset(Dataset):
@@ -94,18 +95,19 @@ class TransformerConf3Dataset(Dataset):
         for particle, cand in cands.items():
             # load the zip file of the particle
             zip_path = self.dataset_path.format(particle, lookup_key[0], lookup_key[1], lookup_key[2])
-            zip_file = ZipFile(zip_path, "r")
-            for cand_id in cand:
-                with zip_file.open(str(cand_id)) as f:
-                    loaded_cand = np.load(f)
+            with ZipFile(zip_path, "r") as zip_file:
+                for cand_id in cand:
+                    with zip_file.open(str(cand_id)) as f:
+                        buf = io.BytesIO(f.read())
+                        loaded_cand = np.load(buf)
                 # folder_index = cand_id // self.event_in_folder
                 # paths = glob(self.dataset_path.format(particle, folder_index, cand_id))
                 # assert len(paths) == 1
                 # loaded_cand = np.load(paths[0])  # load particle
-                if particle == 'muon' or particle == 'proton_exiting':
-                    particles['exiting'].append(loaded_cand)
-                elif particle == 'proton_contained':
-                    particles['proton_contained'].append(loaded_cand)
+                    if particle == 'muon' or particle == 'proton_exiting':
+                        particles['exiting'].append(loaded_cand)
+                    elif particle == 'proton_contained':
+                        particles['proton_contained'].append(loaded_cand)
                 
         # Random shift (same for all the particles)
         shift = np.random.randint(-self.cube_shift, self.cube_shift + 1, 3)

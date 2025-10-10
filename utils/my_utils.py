@@ -165,7 +165,7 @@ def fix_empty_particles(counts_p, counts_D, counts_T, np_rand_obj):
         counts_T += one_hot_fix[:, 2]
 
 
-def gen_image(generator, args, test_set, ke, theta, phi, ini_x, ini_y, ini_z,
+def gen_image(generator, args, test_set, ke, ini_dir, ini_pos,
               exit_x=None, exit_y=None, exit_z=None, n_images=1, device="cpu"):
     """
     Generate synthetic images using a generative model.
@@ -176,11 +176,8 @@ def gen_image(generator, args, test_set, ke, theta, phi, ini_x, ini_y, ini_z,
         args (object): An object containing additional arguments and settings.
         test_set (object): An object representing the test set with source and target data ranges.
         ke (float): Kinetic energy of the particle.
-        theta (float): Theta angle of the particle trajectory.
-        phi (float): Phi angle of the particle trajectory.
-        ini_x (float): Initial x-coordinate of the particle.
-        ini_y (float): Initial y-coordinate of the particle.
-        ini_z (float): Initial z-coordinate of the particle.
+        ini_dir (float): Direction of the particle trajectory.
+        ini_pos (float): Initial position of the particle.
         exit_x (float, optional): Final x-coordinate of the particle (used for the mu case).
         exit_y (float, optional): Final y-coordinate of the particle (used for the mu case).
         exit_z (float, optional): Final z-coordinate of the particle (used for the mu case).
@@ -191,44 +188,39 @@ def gen_image(generator, args, test_set, ke, theta, phi, ini_x, ini_y, ini_z,
         numpy.ndarray: An array containing the generated synthetic images, reshaped to the specified
         dimensions (n_images, 5, 5, 5).
     """
+
+    particle = args.particle
     # Kinematic parameters
+    
     if exit_x is None:
         # p, D+, T+ case
-        params = np.array([ini_x, ini_y, ini_z, ke, theta, phi])
-        # Rescale
-        params[:3] = np.interp(params[:3].ravel(), (test_set.min_pos, test_set.max_pos),
-                               test_set.source_range).reshape(params[:3].shape)
-        params[3] = np.interp(params[3], (test_set.min_ke, test_set.max_ke),
-                              test_set.source_range).reshape(1)
-        params[4] = np.interp(params[4], (test_set.min_theta, test_set.max_theta),
-                              test_set.source_range).reshape(1)
-        params[5] = np.interp(params[5], (test_set.min_phi, test_set.max_phi),
-                              test_set.source_range).reshape(1)
+        params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2]])
+
+        # params[3] -= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
+        # params[3] /= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
+        # params[:3] /= (test_set.cube_size * 1.5)
+        
     else:
         # mu case
-        params = np.array([ini_x, ini_y, ini_z, exit_x, exit_y, exit_z, ke, theta, phi])
-        # Rescale
-        params[:3] = np.interp(params[:3].ravel(), (test_set.min_pos, test_set.max_pos),
-                               test_set.source_range).reshape(params[:3].shape)
-        params[3:6] = np.interp(params[3:6].ravel(), (test_set.min_exit_pos_mu, test_set.max_exit_pos_mu),
-                                test_set.source_range).reshape(params[3:6].shape)
-        params[6] = np.interp(params[6], (test_set.min_ke, test_set.max_ke),
-                              test_set.source_range).reshape(1)
-        params[7] = np.interp(params[7], (test_set.min_theta, test_set.max_theta),
-                              test_set.source_range).reshape(1)
-        params[8] = np.interp(params[8], (test_set.min_phi, test_set.max_phi),
-                              test_set.source_range).reshape(1)
+        params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], exit_x, exit_y, exit_z, ke, ini_dir[0], ini_dir[1], ini_dir[2]])
+        
+        # params[6] -= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
+        # params[6] /= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
+        # params[3:6] /= (test_set.cube_size * 3.5)
+        # params[:3] /= (test_set.cube_size * 1.5)
+    
 
     # Tensors
     params = torch.tensor(np.array([params for i in range(n_images)])).float().to(device)
     noise = torch.normal(0, 1, size=(len(params), 1, args.noise_size)).to(device)  # normal noise!
 
+    print("params: ", params)
     # Run the generator
     sample_image = generator(params, noise).data.cpu()
 
     # Rescale back
-    sample_image = np.interp(sample_image.ravel(), test_set.target_range,
-                             (test_set.min_charge, test_set.max_charge)).reshape(sample_image.shape)
+    sample_image *= test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
+    #sample_image += test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['mean']
 
     return sample_image.reshape(n_images, 5, 5, 5)
 

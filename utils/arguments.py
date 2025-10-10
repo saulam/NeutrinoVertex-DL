@@ -80,11 +80,14 @@ def args_gan():
     parser.add_argument("--save_dir", type=str, default="logs", help="log save directory")
     parser.add_argument("--checkpoint_path", type=str, default="checkpoints", help="Checkpoint path")
     parser.add_argument("--checkpoint_name", type=str, default="v1", help="checkpoint name")
+    parser.add_argument("--save_top_k", type=int, default=1, help="save top k checkpoints")
+
+    parser.add_argument("--name", type=str, default="v1", help="model name")
 
     parser.add_argument("-va", "--va_size", type=int, default=7, help="VA region size in cubes")
     parser.add_argument("-cp", "--cube_size", type=float, default=10.27, help="cube size in mm")
     parser.add_argument("-pd", "--pad_value", type=int, default=-10000, help="pad value")
-    parser.add_argument("-ims", "--img_size", type=int, default=128, help="image size in pixels")
+    parser.add_argument("-ims", "--img_size", type=int, default=5, help="image size in pixels")
 
     parser.add_argument("-is", "--input_size", type=int, default=1, help="input dimension (per cube)")
     parser.add_argument("-ls", "--label_size", type=int, default=7, help="number of labels (kinematic parameters)")
