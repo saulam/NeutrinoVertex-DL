@@ -61,6 +61,7 @@ def args_transformer(version=1):
                         default=[0],  # Default list
                         help='list of GPUs to use (more than 1 GPU will run the training in parallel)'
                         )
+    parser.add_argument("--num_nodes", type=int, default=1, help="number of nodes to use")
 
     return parser
 

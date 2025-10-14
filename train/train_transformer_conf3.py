@@ -165,6 +165,7 @@ def main():
         accelerator="gpu",
         precision="bf16-mixed" if pl_major >= 2 else 32,
         devices=nb_gpus,
+        num_nodes=args.num_nodes,
         strategy="ddp" if nb_gpus > 1 else "auto",
         logger=[logger, tb_logger],
         log_every_n_steps=args.log_every_n_steps,
