@@ -12,6 +12,8 @@ sys.path.append(os.path.abspath(".."))
 import json
 import torch
 import pytorch_lightning as pl
+# check lightning version
+print(pl.__version__)
 
 from torch.utils.data import DataLoader
 from datasets import GANDataset
@@ -48,22 +50,7 @@ def main():
     parser = args_gan()
     args, unknown = parser.parse_known_args()
 
-    args.particle = "proton_contained"
-    args.metadata_path = "/scratch/libota/sfgd_va_nn_data/NN_Data/metadata.pkl"
-    args.dataset_path = "/scratch/libota/sfgd_va_nn_data/NN_Data/{}/{}/{}.npz"
-    args.gan_ind_path = "/scratch/libota/sfgd_va_nn_data/NN_Data/gan_ind.pkl"
-    args.save_dir = "/scratch2/libota/SFGD_Vertex_Activity/Results/gan/"
-    args.checkpoint_path = "/scratch2/libota/SFGD_Vertex_Activity/Results/gan/checkpoints"
-    args.checkpoint_name = "proton_contained"
 
-    args.epochs = 50
-    args.log_every_n_steps = 2000
-    args.batch_size = 3072
-    args.hidden = 64
-    args.warmup_steps = 10
-    args.num_workers = 64
-
-    
     # Training set and loader
     train_set = GANDataset(args, split="train")
     train_loader = DataLoader(train_set, collate_fn=train_set.collate_fn, batch_size=args.batch_size,
@@ -75,7 +62,7 @@ def main():
                           hidden=args.hidden, n_layers=args.layers, attn_heads=args.attn_heads, dropout=args.dropout)
     critic = Critic(input_size=args.input_size, label_size=args.label_size, noise_size=args.noise_size,
                         hidden=args.hidden, n_layers=args.layers, attn_heads=args.attn_heads, dropout=args.dropout)
-    
+
     generator._init_weights()
     critic._init_weights()
     gen_total_params = sum(p.numel() for p in generator.parameters() if p.requires_grad)
@@ -83,6 +70,7 @@ def main():
     print(generator)
     print(critic)
     print("Total trainable params: {} (generator), {} (discriminator).".format(gen_total_params, cri_total_params))
+
 
     # Loss function (for critic)
     adv_loss = WGAN_GP_Loss(args.lambda_gp)
@@ -126,8 +114,8 @@ def main():
         accelerator="gpu",
         precision="bf16",
         devices=torch.cuda.device_count(),
-        logger=logger,
         strategy="ddp" if torch.cuda.device_count() > 1 else "auto",
+        logger=logger,
         log_every_n_steps=100,
         deterministic=True,
     )
