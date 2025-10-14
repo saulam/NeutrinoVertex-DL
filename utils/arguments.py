@@ -104,6 +104,11 @@ def args_gan():
     parser.add_argument("-wd", "--weight_decay", type=float, default=0, help="weight_decay of the optimiser")
     parser.add_argument('-cr', '--crit_repeats', type=int, default=5, help='Critic iterations per generator')
     parser.add_argument('-lgp', '--lambda_gp', type=int, default=10, help='Lambda value for gradient penalty')
-
+    parser.add_argument('--gpus', nargs='*',  # 'nargs' can be '*' or '+' depending on your needs
+                        default=[0],  # Default list
+                        help='list of GPUs to use (more than 1 GPU will run the training in parallel)'
+                        )
+    parser.add_argument("--particle", type=str, default="proton_contained", help="particle type")
+    
     return parser
 
