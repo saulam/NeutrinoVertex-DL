@@ -166,7 +166,7 @@ def fix_empty_particles(counts_p, counts_D, counts_T, np_rand_obj):
 
 
 def gen_image(generator, args, test_set, ke, ini_dir, ini_pos,
-              exit_x=None, exit_y=None, exit_z=None, n_images=1, device="cpu"):
+              exit_pos=None, n_images=1, device="cpu"):
     """
     Generate synthetic images using a generative model.
 
@@ -192,7 +192,7 @@ def gen_image(generator, args, test_set, ke, ini_dir, ini_pos,
     particle = args.particle
     # Kinematic parameters
     
-    if exit_x is None:
+    if exit_pos is None:
         # p, D+, T+ case
         params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2]])
 
@@ -202,7 +202,7 @@ def gen_image(generator, args, test_set, ke, ini_dir, ini_pos,
         
     else:
         # mu case
-        params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], exit_x, exit_y, exit_z, ke, ini_dir[0], ini_dir[1], ini_dir[2]])
+        params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], exit_pos[0], exit_pos[1], exit_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2]])
         
         # params[6] -= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
         # params[6] /= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
@@ -219,7 +219,13 @@ def gen_image(generator, args, test_set, ke, ini_dir, ini_pos,
     sample_image = generator(params, noise).data.cpu()
 
     # Rescale back
-    sample_image *= test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
+    min_charge = test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['min']
+    max_charge = test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['max']
+    
+    #rescale from -1,1 to min_charge, max_charge
+    sample_image = (sample_image + 1) / 2
+    sample_image *= (max_charge - min_charge)
+    sample_image += min_charge
     #sample_image += test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['mean']
 
     return sample_image.reshape(n_images, 5, 5, 5)

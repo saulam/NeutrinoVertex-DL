@@ -22,17 +22,17 @@ weight_decay=0.05
 beta1=0.9
 beta2=0.95
 save_dir="/pscratch/sd/b/botaoli/SFGD_VA/Results"
-name="v3"
+name="v4"
 log_every_n_steps=400
 save_top_k=5
 checkpoint_path="/pscratch/sd/b/botaoli/SFGD_VA/Results/checkpoints"
-checkpoint_name="v3"
+checkpoint_name="v4"
 early_stop_patience=1000
 gpus=(0 1 2 3)
 num_nodes=2
 load_checkpoint=last
 
-python -m train.train_transformer_conf3 \
+python -m train.train_transformer_conf4 \
     --metadata_path $metadata_path \
     --dataset_path $dataset_path \
     --eps $eps \

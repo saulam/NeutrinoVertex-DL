@@ -1,5 +1,6 @@
 from .transformer_conf1_dataset import TransformerConf1Dataset
 from .transformer_conf2_dataset import TransformerConf2Dataset
 from .transformer_conf3_dataset import TransformerConf3Dataset
+from .transformer_conf4_dataset import TransformerConf4Dataset
 from .gan_dataset import GANDataset
 from .dataset import VADataset

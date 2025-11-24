@@ -132,9 +132,15 @@ class LightningModelGAN(pl.LightningModule):
             mean_w_loss += w_loss.item() / self.crit_repeats
             mean_c_loss_real += c_loss_real.item() / self.crit_repeats
             mean_c_loss_fake += c_loss_fake.item() / self.crit_repeats
-        self.log("w_loss", mean_w_loss, prog_bar=True)
-        self.log("c_loss_real", mean_c_loss_real, prog_bar=True)
-        self.log("c_loss_fake", mean_c_loss_fake, prog_bar=True)
+        self.log("w_loss", mean_w_loss, prog_bar=True, sync_dist=True)
+        self.log("c_loss_real", mean_c_loss_real, prog_bar=True, sync_dist=True)
+        self.log("c_loss_fake", mean_c_loss_fake, prog_bar=True, sync_dist=True)
+        
+        # print("step:", self.global_step)
+        # print("w_losses:", w_losses)
+        # print("c_loss_real_list:", c_loss_real_list)
+        # print("c_loss_fake_list:", c_loss_fake_list)
+        
         self.untoggle_optimizer(optimizer_c)
 
         # Train generator

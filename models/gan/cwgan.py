@@ -125,7 +125,7 @@ class Decoder(nn.Module):
         """
         super().__init__()
         self.linear = nn.Linear(hidden, out_size)
-        if activation is not None:
+        if activation:
             self.activation = nn.Tanh()
         else:
             self.activation = None
@@ -190,6 +190,8 @@ class WGAN_GP_Loss(nn.Module):
                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
         grad = grad.view(grad.size(0), -1)
         grad_penalty = self.lambda_gp * ((grad.norm(2, dim=1) - 1) ** 2).mean()
-
+        # add an extra penalty on the real_loss value
+        epsilon = 0.001
+        real_loss_penalty = epsilon * (real_loss**2+fake_loss**2).mean()
         # Return the final loss
-        return wd + grad_penalty, real_loss, fake_loss
+        return wd + grad_penalty + real_loss_penalty, real_loss, fake_loss

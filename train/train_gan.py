@@ -41,14 +41,27 @@ class CustomProgressBar(TQDMProgressBar):
         return bar
 
 def main():
-    # Manually specify the GPUs to use
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(i) for i in range(torch.cuda.device_count()))
+    
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     torch.multiprocessing.set_sharing_strategy('file_system')
     # Arguments
     parser = args_gan()
     args, unknown = parser.parse_known_args()
+
+    print(args)
+
+    if args.particle == "proton_exiting" or args.particle == "muon":
+        args.label_size = 10
+    else:
+        args.label_size = 7
+
+    nb_gpus = len(args.gpus)
+    gpus = ', '.join(args.gpus) if nb_gpus > 1 else str(args.gpus[0])
+
+    # Manually specify the GPUs to use
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpus
 
 
     # Training set and loader
@@ -83,20 +96,22 @@ def main():
                                         adversarial_loss=adv_loss, lr=args.lr, wd=args.weight_decay)
 
     # Define logger and checkpoint
-    logger = CSVLogger(save_dir=args.save_dir + "/logs", name=args.name)
-    tb_logger = TensorBoardLogger(save_dir=args.save_dir + "/tb_logs", name=args.name)
+    logger = CSVLogger(save_dir=args.save_dir + "/logs/"+args.particle, name=args.name)
+    tb_logger = TensorBoardLogger(save_dir=args.save_dir + "/tb_logs/"+args.particle, name=args.name)
     #checkpoint_callback = ModelCheckpoint(dirpath=config["save_path"], every_n_train_steps=5000)
 
     callbacks = []
-    monitored_losses = ['val_loss',]
+    monitored_losses = ['w_loss',]
 
     for loss_name in monitored_losses:
         checkpoint = ModelCheckpoint(
             dirpath=f"{args.checkpoint_path}/{args.checkpoint_name}/{loss_name}",
-            save_top_k=args.save_top_k,
+            every_n_train_steps=100000,
+            save_last=True,
+            save_top_k=-1,
             monitor=loss_name,
             mode="min",
-            save_last=True
+            save_on_train_epoch_end=False,
         )
         callbacks.append(checkpoint)
 
@@ -113,10 +128,11 @@ def main():
         callbacks=callbacks,
         accelerator="gpu",
         precision="bf16",
-        devices=torch.cuda.device_count(),
-        strategy="ddp" if torch.cuda.device_count() > 1 else "auto",
-        logger=logger,
-        log_every_n_steps=100,
+        devices=nb_gpus,
+        num_nodes=args.num_nodes,
+        strategy="ddp_find_unused_parameters_true" if nb_gpus > 1 else "auto",
+        logger=[logger, tb_logger],
+        log_every_n_steps=args.log_every_n_steps,
         deterministic=True,
     )
 
@@ -124,6 +140,7 @@ def main():
     trainer.fit(
         model=lightning_model,
         train_dataloaders=train_loader,
+        ckpt_path=args.load_checkpoint if args.load_checkpoint else None,
     )
 
 

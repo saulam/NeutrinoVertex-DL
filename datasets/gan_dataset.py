@@ -14,6 +14,8 @@ from torch.utils.data import Dataset
 import random
 import bisect
 from glob import glob
+from zipfile import ZipFile
+import io
 
 
 class GANDataset(Dataset):
@@ -36,7 +38,6 @@ class GANDataset(Dataset):
         self.particle = args.particle
         self.lookup_tables = self.gan_ind[self.particle]
         self.lookup_keys = list(self.lookup_tables.keys())
-        self.lookup_keys.sort()
 
         self.split = split
         self.dataset_path = args.dataset_path
@@ -46,25 +47,32 @@ class GANDataset(Dataset):
         self.pad_value = args.pad_value
 
 
-        for key in self.lookup_tables.keys():
-            random.shuffle(self.lookup_tables[key])
 
-        self.values = [self.lookup_tables[k] for k in self.lookup_keys]
-        self.lens = [len(v) for v in self.values]
+        # for key in self.lookup_tables.keys():
+        #     random.shuffle(self.lookup_tables[key])
 
+        self.lens = [self.lookup_tables[k] for k in self.lookup_keys]
+        
         # Build cumulative end indices: [len(A), len(A)+len(B), ...]
         self.cums = []
+
+        self.test_events = []
         total = 0
         for L in self.lens:
             total += L
             self.cums.append(total)
+            # save the last event of each sub voxel as the test event
+            self.test_events.append(total)
         
         self.total_events = self.__len__() # total number of different particles
 
 
 
     def __len__(self):
-        return self.cums[-1] if self.cums else 0
+        if self.split == "train":
+            return self.cums[-1] if self.cums else 0
+        elif self.split == "test":
+            return len(self.test_events)
 
 
 
@@ -79,7 +87,7 @@ class GANDataset(Dataset):
             tuple: A tuple containing two tensors - image batch and parameters batch.
         """
         img_batch = np.array([event['image'] for event in batch if event['image'] is not None])
-        if self.particle == "mu" or self.particle == "proton_exiting":
+        if self.particle == "muon" or self.particle == "proton_exiting":
             params_batch = np.array([np.concatenate([event['pos_ini'], event['pos_exit'],
                                                      event['ke'], event['dir_ini']])
                                      for event in batch if event['pos_ini'] is not None])
@@ -107,15 +115,25 @@ class GANDataset(Dataset):
         if idx < 0 or idx >= len(self):
             raise IndexError(idx)
 
+        if self.split == "train":
+            while idx in self.test_events:
+                # pick a random event from the test set
+                idx = random.randint(0, len(self.test_events) - 1)
+        elif self.split == "test":
+            idx = self.test_events[idx]
         # Find which sub-list this global index falls into
         j = bisect.bisect_right(self.cums, idx)  # 0..len(keys)-1
         prev_end = self.cums[j-1] if j > 0 else 0
-        local_idx = idx
+        local_idx = idx - prev_end
+        data_file = self.dataset_path.format(self.particle, 
+                    self.lookup_keys[j][0],
+                    self.lookup_keys[j][1],
+                    self.lookup_keys[j][2])
         #print("path: ", self.dataset_path.format(self.particle, self.lookup_keys[j], local_idx))
-        paths = glob(self.dataset_path.format(self.particle, self.lookup_keys[j], local_idx))
-        #print("paths: ", paths)
-        assert len(paths) == 1
-        loaded_cand = np.load(paths[0])  # load particle
+        with ZipFile(data_file, "r") as zip_file:
+            with zip_file.open(zip_file.namelist()[local_idx]) as f:
+                    buf = io.BytesIO(f.read())
+                    loaded_cand = np.load(buf)
 
         max_extend = self.va_size//2
 
@@ -164,18 +182,19 @@ class GANDataset(Dataset):
             'ke': np.zeros(shape=(1,)),
             'dir_ini': np.zeros(shape=(3,))
         }
-        if self.particle == "mu" or self.particle == "proton_exiting":
+        if self.particle == "muon" or self.particle == "proton_exiting":
             output['pos_exit'] = np.zeros(shape=(3,))
 
         # Reconstruct the image to a (self.va_size-2)x(self.va_size-2)x(self.va_size-2) flat volume
-        dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
+        #dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
+        dense_image = np.random.rand(self.va_size, self.va_size, self.va_size)
         dense_image[hit_x_ind[:], hit_y_ind[:], hit_z_ind[:]] = hit_q_val[:]
         boundary_size = self.va_size//2 - self.img_size//2
         output['image'] = dense_image[boundary_size:-boundary_size, boundary_size:-boundary_size, boundary_size:-boundary_size].reshape(-1)
         output['pos_ini'] = pos_ini_mod
         output['ke'] = np.array([iniekin])
         output['dir_ini'] = inidir
-        if self.particle == "mu" or self.particle == "proton_exiting":
+        if self.particle == "muon" or self.particle == "proton_exiting":
             output['pos_exit'] = self.calc_exit_point(pos_ini_mod, inidir)
 
         self.preprocess(self.particle, output)
@@ -234,16 +253,26 @@ class GANDataset(Dataset):
 
 
     def preprocess(self, particle, output):
-        output['image'] /= self.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
+        #output['image'] -= self.metadata['statistics']['per_tree'][particle]['recon_charge']['mean']
+        #output['image'] /= self.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
+        # Normalize the image to -1,1 using min-max scaling
+        #min_charge = self.metadata['statistics']['per_tree'][particle]['recon_charge']['min']
+        min_charge = 0
+        max_charge = self.metadata['statistics']['per_tree'][particle]['recon_charge']['max']
+
+        output['image'][output['image'] > max_charge] = max_charge
+        output['image'] = (output['image'] - min_charge) / (max_charge - min_charge)
+        output['image'] = 2 * output['image'] - 1
+
         output['ke'] -= self.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
         output['ke'] /= self.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
         output['pos_ini'] /= (self.cube_size * 1.5)
-        if particle == "mu" or particle == "proton_exiting":
+        if particle == "muon" or particle == "proton_exiting":
             output['pos_exit'] /= (self.cube_size * 3.5)
         
         output['image'] = torch.from_numpy(output['image'])
         output['pos_ini'] = torch.from_numpy(output['pos_ini'])
         output['ke'] = torch.from_numpy(output['ke'])
         output['dir_ini'] = torch.from_numpy(output['dir_ini'])
-        if particle == "mu" or particle == "proton_exiting":
+        if particle == "muon" or particle == "proton_exiting":
             output['pos_exit'] = torch.from_numpy(output['pos_exit'])
