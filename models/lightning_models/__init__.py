@@ -1,2 +1,3 @@
 from .lightning_model_transformer_conf1 import LightningModelTransformerConf1
 from .lightning_model_gan import LightningModelGAN
+from .lightning_model_diffusion import LightningModelDiffusion
