@@ -1,2 +1,3 @@
 from .lightning_model_transformer_conf3 import LightningModelTransformerConf3
 from .lightning_model_gan import LightningModelGAN
+from .lightning_model_nFlow import LightningModelCNF

@@ -120,3 +120,49 @@ def args_gan():
     
     return parser
 
+def args_cnf():
+    """
+    Create an argument parser for GAN (generative adversarial network) model configuration.
+
+    Returns:
+        argparse.ArgumentParser: An argument parser with options for configuring the GAN model.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset_path", type=str, default=None, help="path of dataset file")
+    parser.add_argument("--metadata_path", type=str, default=None, help="path of metadata file")
+    parser.add_argument("--cnf_ind_path", type=str, default=None, help="path of cnf index file")
+    parser.add_argument("--particle", type=str, default="proton_contained", help="particle type")
+
+    parser.add_argument("--save_dir", type=str, default="logs", help="log save directory")
+    parser.add_argument("--checkpoint_path", type=str, default="checkpoints", help="Checkpoint path")
+    parser.add_argument("--checkpoint_name", type=str, default="v1", help="checkpoint name")
+    parser.add_argument("--save_top_k", type=int, default=1, help="save top k checkpoints")
+    parser.add_argument("--log_every_n_steps", type=int, default=50, help="steps between logs")
+
+    parser.add_argument("--name", type=str, default="v1", help="model name")
+
+    parser.add_argument("-va", "--va_size", type=int, default=7, help="VA region size in cubes")
+    parser.add_argument("-cp", "--cube_size", type=float, default=10.27, help="cube size in mm")
+    parser.add_argument("-pd", "--pad_value", type=int, default=-10000, help="pad value")
+    parser.add_argument("-ims", "--img_size", type=int, default=5, help="image size in pixels")
+
+    parser.add_argument("-is", "--input_size", type=int, default=1, help="input dimension (per cube)")
+    parser.add_argument("-ls", "--label_size", type=int, default=7, help="number of labels (kinematic parameters)")
+    parser.add_argument("-hs", "--hidden", type=int, default=256, help="hidden size of transformer model")
+    parser.add_argument("-nt", "--num_transformers", type=int, default=8, help="number of transformers")
+    parser.add_argument("-nb", "--num_blocks_in_MADE", type=int, default=2, help="number of blocks in MADE")
+    parser.add_argument("-b", "--batch_size", type=int, default=32, help="batch_size")
+    parser.add_argument("-e", "--epochs", type=int, default=100, help="number of epochs")
+    parser.add_argument("-w", "--num_workers", type=int, default=8, help="dataloader worker size")
+    parser.add_argument("--lr", type=float, default=5e-5, help="learning rate of the optimiser")
+    parser.add_argument("-wd", "--weight_decay", type=float, default=0, help="weight_decay of the optimiser")
+    parser.add_argument('--gpus', nargs='*',  # 'nargs' can be '*' or '+' depending on your needs
+                        default=[0],  # Default list
+                        help='list of GPUs to use (more than 1 GPU will run the training in parallel)'
+                        )
+    parser.add_argument("--num_nodes", type=int, default=1, help="number of nodes to use")
+
+    parser.add_argument("--load_checkpoint", type=str, default=None, help="name of the checkpoint to load")
+    
+    return parser
+

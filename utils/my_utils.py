@@ -230,6 +230,71 @@ def gen_image(generator, args, test_set, ke, ini_dir, ini_pos,
 
     return sample_image.reshape(n_images, 5, 5, 5)
 
+def gen_image_cnf(generator, args, test_set, ke, ini_dir, ini_pos,
+              exit_pos=None, n_images=1, device="cpu"):
+    """
+    Generate synthetic images using a generative model.
+
+    Args:
+        generator (callable): The generative model function that takes parameters and noise
+            as input and generates synthetic images.
+        args (object): An object containing additional arguments and settings.
+        test_set (object): An object representing the test set with source and target data ranges.
+        ke (float): Kinetic energy of the particle.
+        ini_dir (float): Direction of the particle trajectory.
+        ini_pos (float): Initial position of the particle.
+        exit_x (float, optional): Final x-coordinate of the particle (used for the mu case).
+        exit_y (float, optional): Final y-coordinate of the particle (used for the mu case).
+        exit_z (float, optional): Final z-coordinate of the particle (used for the mu case).
+        n_images (int, optional): The number of synthetic images to generate.
+        device (str, optional): The device on which to run the generator (e.g., "cpu" or "cuda").
+
+    Returns:
+        numpy.ndarray: An array containing the generated synthetic images, reshaped to the specified
+        dimensions (n_images, 5, 5, 5).
+    """
+
+    particle = args.particle
+    # Kinematic parameters
+    
+    if exit_pos is None:
+        # p, D+, T+ case
+        params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2]])
+
+        # params[3] -= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
+        # params[3] /= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
+        # params[:3] /= (test_set.cube_size * 1.5)
+        
+    else:
+        # mu case
+        params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], exit_pos[0], exit_pos[1], exit_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2]])
+        
+        # params[6] -= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['mean']
+        # params[6] /= test_set.metadata['statistics']['per_tree'][particle]['true_iniekin']['std']
+        # params[3:6] /= (test_set.cube_size * 3.5)
+        # params[:3] /= (test_set.cube_size * 1.5)
+    
+
+    # Tensors
+    params = torch.tensor(np.array([params for i in range(n_images)])).float().to(device)
+    noise = torch.normal(0, 1, size=(len(params), 1, args.noise_size)).to(device)  # normal noise!
+
+    print("params: ", params)
+    # Run the generator
+    sample_image = generator(params, noise).data.cpu()
+
+    # Rescale back
+    min_charge = test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['min']
+    max_charge = test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['max']
+    
+    #rescale from -1,1 to min_charge, max_charge
+    sample_image = (sample_image + 1) / 2
+    sample_image *= (max_charge - min_charge)
+    sample_image += min_charge
+    #sample_image += test_set.metadata['statistics']['per_tree'][particle]['recon_charge']['mean']
+
+    return sample_image.reshape(n_images, 5, 5, 5)
+
 
 def centre_vertex(vtx, test_set):
     """
