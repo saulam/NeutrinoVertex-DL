@@ -44,30 +44,30 @@ class LightningModelCNF(pl.LightningModule):
         transform_list = []
         for _ in range(self.num_transformers):
             transform_list.append(
-                # transforms.MaskedAffineAutoregressiveTransform(
-                #     features=self.data_dim,
-                #     hidden_features=self.hidden_features,
-                #     context_features=self.label_size,
-                #     num_blocks=self.num_blocks_in_MADE,
-                #     use_residual_blocks=False,
-                #     activation=torch.nn.ReLU(),
-                #     dropout_probability=0.0,
-                #     use_batch_norm=False,
-                # )
-                transforms.MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
-                    features=self.data_dim,
-                    hidden_features=self.hidden_features,
-                    context_features=self.label_size,
-                    num_bins=10,
-                    tails="linear",
-                    tail_bound=1.0,
-                    num_blocks=self.num_blocks_in_MADE,
-                    use_residual_blocks=True,
-                    random_mask=False,
-                    activation=torch.nn.ReLU(),
-                    dropout_probability=0.0,
-                    use_batch_norm=False,
-                    )
+                #transforms.MaskedAffineAutoregressiveTransform(
+                #    features=self.data_dim,
+                #    hidden_features=self.hidden_features,
+                #    context_features=self.label_size,
+                #    num_blocks=self.num_blocks_in_MADE,
+                #    use_residual_blocks=False,
+                #    activation=torch.nn.ReLU(),
+                #    dropout_probability=0.0,
+                #    use_batch_norm=False,
+                #)
+                 transforms.MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
+                     features=self.data_dim,
+                     hidden_features=self.hidden_features,
+                     context_features=self.label_size,
+                     num_bins=10,
+                     tails="linear",
+                     tail_bound=1.0,
+                     num_blocks=self.num_blocks_in_MADE,
+                     use_residual_blocks=True,
+                     random_mask=False,
+                     activation=torch.nn.ReLU(),
+                     dropout_probability=0.0,
+                     use_batch_norm=False,
+                     )
                 )
             transform_list.append(
                 transforms.BatchNorm(features=self.data_dim),
