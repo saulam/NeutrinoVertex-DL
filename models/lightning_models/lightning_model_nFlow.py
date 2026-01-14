@@ -108,11 +108,10 @@ class LightningModelCNF(pl.LightningModule):
         return optimizer
 
     @torch.no_grad()
-    def sample(self, labels):
+    def sample(self, labels, num_samples=1):
         """
         labels: (B, label_size)
         returns: (B, data_dim)
         """
-        B = labels.size(0)
-        samples = self.nflow.sample(num_samples=B, context=labels)
+        samples = self.nflow.sample(num_samples=num_samples, context=labels)
         return samples
