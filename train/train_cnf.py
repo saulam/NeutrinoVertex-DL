@@ -53,7 +53,7 @@ def main():
 
 
     if args.particle == "proton_exiting" or args.particle == "muon":
-            args.label_size = 10
+            args.label_size = 7
     else:
             args.label_size = 7
 
@@ -86,8 +86,8 @@ def main():
     print(lightning_model)
 
     # Define logger and checkpoint
-    logger = CSVLogger(save_dir=args.save_dir + "/logs", name=args.name)
-    tb_logger = TensorBoardLogger(save_dir=args.save_dir + "/tb_logs", name=args.name)
+    logger = CSVLogger(save_dir=args.save_dir + "/logs/" + args.particle, name=args.name)
+    tb_logger = TensorBoardLogger(save_dir=args.save_dir + "/tb_logs/" + args.particle, name=args.name)
     #checkpoint_callback = ModelCheckpoint(dirpath=config["save_path"], every_n_train_steps=5000)
 
     callbacks = []

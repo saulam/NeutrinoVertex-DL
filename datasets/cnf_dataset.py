@@ -89,7 +89,8 @@ class CNFDataset(Dataset):
             tuple: A tuple containing two tensors - image batch and parameters batch.
         """
         img_batch = np.array([event['image'] for event in batch if event['image'] is not None])
-        if self.particle == "muon" or self.particle == "proton_exiting":
+        #if self.particle == "muon" or self.particle == "proton_exiting":
+        if 0:
             params_batch = np.array([np.concatenate([event['pos_ini'], event['pos_exit'],
                                                      event['ke'], event['dir_ini']])
                                      for event in batch if event['pos_ini'] is not None])
