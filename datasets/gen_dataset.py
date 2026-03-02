@@ -98,7 +98,7 @@ class GenDataset(Dataset):
         """
         img_batch = np.array([event['image'] for event in batch if event['image'] is not None])
         if self.particle == "muon" or self.particle == "proton_exiting":
-            params_batch = np.array([np.concatenate([event['pos_ini'], event['pos_exit'],
+            params_batch = np.array([np.concatenate([event['pos_ini'],
                                                      event['ke'], event['dir_ini']])
                                      for event in batch if event['pos_ini'] is not None])
         else:

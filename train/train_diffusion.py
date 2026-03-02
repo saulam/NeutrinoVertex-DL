@@ -52,7 +52,7 @@ def main():
     print(args)
 
     if args.particle == "proton_exiting" or args.particle == "muon":
-        args.label_size = 10
+        args.label_size = 7
     else:
         args.label_size = 7
 

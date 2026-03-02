@@ -145,11 +145,12 @@ class ConditionalDiffusionModel(nn.Module):
                  cond_dim=128, 
                  base_channels=32, 
                  num_timesteps=1000,
-                 img_size=7):
+                 img_size=7,
+                 label_size=7):
         super().__init__()
         self.num_timesteps = num_timesteps
         self.img_size = img_size
-
+        self.label_size = label_size
         # betas / alphas schedule (simple linear schedule as an example)
         betas = torch.linspace(1e-4, 0.02, num_timesteps)
         alphas = 1.0 - betas
@@ -164,7 +165,7 @@ class ConditionalDiffusionModel(nn.Module):
         # embeddings
         self.time_embed = SinusoidalTimeEmbedding(time_dim)
         self.time_mlp = TimeMLP(time_dim, cond_dim)
-        self.kin_encoder = KinematicsEncoder(in_dim=7, hidden_dim=cond_dim, out_dim=cond_dim)
+        self.kin_encoder = KinematicsEncoder(in_dim=label_size, hidden_dim=cond_dim, out_dim=cond_dim)
 
         # U-Net
         self.unet = UNet3DConditioned(cond_dim=cond_dim, base_channels=base_channels, img_size=img_size)
