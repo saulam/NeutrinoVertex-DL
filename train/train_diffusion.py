@@ -106,6 +106,12 @@ def main():
         lr=args.lr, 
         wd=args.weight_decay,
         energy_loss_weight=0.0,
+        foreground_weight=4.0,
+        aux_x0_weight=0.1,
+        charge_transform=None,
+        clamp_x0_for_energy=False,
+        sample_eta=0.0,
+        sample_clamp_x0=False,
     )
 
     # Define logger and checkpoint
