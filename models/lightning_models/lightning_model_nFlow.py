@@ -41,6 +41,9 @@ class LightningModelCNF(pl.LightningModule):
         """
         Build the flow.
         """
+
+        #TODO: change to coupling layers for faster sampling
+        #TODO: remove batch norm if training not stable
         transform_list = []
         for _ in range(self.num_transformers):
             transform_list.append(
@@ -90,17 +93,19 @@ class LightningModelCNF(pl.LightningModule):
         return self.nflow.log_prob(x, context=y)
     
     def training_step(self, batch, batch_idx):
-        x, labels = batch
+        x, labels, _ = batch
         log_px = self.nflow.log_prob(inputs=x, context=labels)
+
+
         loss = -log_px.mean()
-        self.log("train_loss", loss, prog_bar=True, sync_dist=True)
+        self.log("train_loss", loss, batch_size=x.shape[0], prog_bar=True, sync_dist=True, on_epoch=True, on_step=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, labels = batch
+        x, labels, _ = batch
         log_px = self.nflow.log_prob(inputs=x, context=labels)
         loss = -log_px.mean()
-        self.log("val_loss", loss, prog_bar=True, sync_dist=True)
+        self.log("val_loss", loss, batch_size=x.shape[0], prog_bar=True, sync_dist=True, on_epoch=True, on_step=False)
         return loss
     
     def configure_optimizers(self):
@@ -109,6 +114,18 @@ class LightningModelCNF(pl.LightningModule):
 
     @torch.no_grad()
     def sample(self, labels, num_samples=1):
+        """
+        labels: (B, label_size)
+        returns: (B, data_dim)
+        """
+        #print("labels.shape =", labels.shape)
+        #print("num_samples =", num_samples)
+        #torch.manual_seed(0)
+        samples = self.nflow.sample(num_samples=num_samples, context=labels)
+        return samples
+
+    #TODO: add scheduler
+    def differentiable_sample(self, labels, num_samples=1):
         """
         labels: (B, label_size)
         returns: (B, data_dim)

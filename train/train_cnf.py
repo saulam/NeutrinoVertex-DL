@@ -84,6 +84,8 @@ def main():
 
     # output the model architecture
     print(lightning_model)
+    # output number of parameters
+    print(f"Number of parameters: {sum(p.numel() for p in lightning_model.parameters() if p.requires_grad)}")
 
     # Define logger and checkpoint
     logger = CSVLogger(save_dir=args.save_dir + "/logs/" + args.particle, name=args.name)
@@ -105,6 +107,15 @@ def main():
 
     progress_bar = CustomProgressBar()
     callbacks.append(progress_bar)
+
+    if args.early_stop_patience > 0:
+        early_stop_callback = EarlyStopping(
+            monitor='val_loss',
+            patience=args.early_stop_patience,
+            mode='min',
+            verbose=True
+        )
+        callbacks.append(early_stop_callback)
 
 
     logger.log_hyperparams(vars(args))

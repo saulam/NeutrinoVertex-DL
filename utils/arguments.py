@@ -163,6 +163,6 @@ def args_cnf():
     parser.add_argument("--num_nodes", type=int, default=1, help="number of nodes to use")
 
     parser.add_argument("--load_checkpoint", type=str, default=None, help="name of the checkpoint to load")
-    
+    parser.add_argument("--early_stop_patience", type=int, default=0, help="early stopping patience (0 means no early stopping)")
     return parser
 

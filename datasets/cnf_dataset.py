@@ -16,6 +16,7 @@ import bisect
 from glob import glob
 from zipfile import ZipFile
 import io
+import itertools
 
 
 class CNFDataset(Dataset):
@@ -89,6 +90,7 @@ class CNFDataset(Dataset):
             tuple: A tuple containing two tensors - image batch and parameters batch.
         """
         img_batch = np.array([event['image'] for event in batch if event['image'] is not None])
+        truth_batch = np.array([event['length'] for event in batch if event['length'] is not None])
         #if self.particle == "muon" or self.particle == "proton_exiting":
         if 0:
             params_batch = np.array([np.concatenate([event['pos_ini'], event['pos_exit'],
@@ -100,7 +102,7 @@ class CNFDataset(Dataset):
         img_batch = torch.tensor(img_batch).float()
         params_batch = torch.tensor(params_batch).float()
 
-        return img_batch, params_batch
+        return img_batch, params_batch, truth_batch
 
     def __getitem__(self, idx):
         """
@@ -144,6 +146,8 @@ class CNFDataset(Dataset):
         hit_y = loaded_cand['recon_sfg_hitposy_rel']
         hit_z = loaded_cand['recon_sfg_hitposz_rel']
         hit_q = loaded_cand['recon_sfg_charge']
+        # get log charge
+        hit_q = np.log(hit_q + 1)
         pos_ini_mod = loaded_cand['true_inipos_mod'] - (self.cube_size / 2.0)
         pos_ini = loaded_cand['true_inipos']
         pos_end = loaded_cand['true_endpos']
@@ -152,6 +156,8 @@ class CNFDataset(Dataset):
         inidir = loaded_cand['true_inidir']
         recon_exit_tag = loaded_cand['recon_exit_tag']
 
+
+
         # print("hit_x: ", hit_x	)
         # print("hit_y: ", hit_y)
         # print("hit_z: ", hit_z)
@@ -159,6 +165,8 @@ class CNFDataset(Dataset):
         # print("pos_ini_mod: ", pos_ini_mod)
         # print("pos_ini: ", pos_ini)
         # print("pos_end: ", pos_end)
+
+        hit_x, hit_y, hit_z, pos_ini_mod, inidir = self.apply_rotation_or_flip(hit_x, hit_y, hit_z, pos_ini_mod, inidir)
 
         mask = (
                   (hit_x >= -max_extend) & (hit_x <= max_extend)
@@ -170,6 +178,8 @@ class CNFDataset(Dataset):
         hit_y_ind = hit_y[mask] + max_extend
         hit_z_ind = hit_z[mask] + max_extend
         hit_q_val = hit_q[mask]
+
+        
 
         if hit_x.shape[0] == 0:
             del loaded_cand
@@ -183,12 +193,14 @@ class CNFDataset(Dataset):
             'image': np.zeros(shape=(self.img_size, self.img_size, self.img_size)),
             'pos_ini': np.zeros(shape=(3,)),
             'ke': np.zeros(shape=(1,)),
-            'dir_ini': np.zeros(shape=(3,))
+            'dir_ini': np.zeros(shape=(3,)),
+            'length': np.zeros(shape=(1,)),
         }
         if self.particle == "muon" or self.particle == "proton_exiting":
             output['pos_exit'] = np.zeros(shape=(3,))
 
         # Reconstruct the image to a (self.va_size-2)x(self.va_size-2)x(self.va_size-2) flat volume
+        #dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
         #dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
         dense_image = np.random.rand(self.va_size, self.va_size, self.va_size)
         dense_image[hit_x_ind[:], hit_y_ind[:], hit_z_ind[:]] = hit_q_val[:]
@@ -197,6 +209,7 @@ class CNFDataset(Dataset):
         output['pos_ini'] = pos_ini_mod
         output['ke'] = np.array([iniekin])
         output['dir_ini'] = inidir
+        output['length'] = np.array([length])
         if self.particle == "muon" or self.particle == "proton_exiting":
             output['pos_exit'] = self.calc_exit_point(pos_ini_mod, inidir)
 
@@ -256,12 +269,13 @@ class CNFDataset(Dataset):
 
 
     def preprocess(self, particle, output):
+
         #output['image'] -= self.metadata['statistics']['per_tree'][particle]['recon_charge']['mean']
         #output['image'] /= self.metadata['statistics']['per_tree'][particle]['recon_charge']['std']
         # Normalize the image to -1,1 using min-max scaling
         #min_charge = self.metadata['statistics']['per_tree'][particle]['recon_charge']['min']
-        min_charge = 0
-        max_charge = self.metadata['statistics']['per_tree'][particle]['recon_charge']['max']
+        min_charge = np.log(1)
+        max_charge = np.log(self.metadata['statistics']['per_tree'][particle]['recon_charge']['max'] + 1)
 
         output['image'][output['image'] > max_charge] = max_charge
         output['image'] = (output['image'] - min_charge) / (max_charge - min_charge)
@@ -279,3 +293,26 @@ class CNFDataset(Dataset):
         output['dir_ini'] = torch.from_numpy(output['dir_ini'])
         if particle == "muon" or particle == "proton_exiting":
             output['pos_exit'] = torch.from_numpy(output['pos_exit'])
+
+
+    def apply_rotation_or_flip(self, hit_x, hit_y, hit_z, pos_ini_mod, inidir):
+        """
+        Apply rotation or flip to the image.
+        """
+        # rot_flip matrix
+        perm = random.choice(list(itertools.permutations([0, 1, 2])))
+        signs = [random.choice([-1, 1]) for _ in range(3)]
+
+        R = np.zeros((3, 3), dtype=np.float32)
+        for i, p in enumerate(perm):
+            R[i, p] = float(signs[i])
+        
+        xyz = np.stack([hit_x, hit_y, hit_z], axis=1).astype(np.float32)
+        xyz = xyz @ R.T
+        xyz = xyz.astype(np.int32)
+        
+        hit_x, hit_y, hit_z = xyz[:,0], xyz[:,1], xyz[:,2]
+        inidir = R @ inidir
+        pos_ini_mod = R @ pos_ini_mod
+
+        return hit_x, hit_y, hit_z, pos_ini_mod, inidir

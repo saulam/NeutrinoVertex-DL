@@ -27,6 +27,58 @@ from utils import args_transformer, args_gan, args_cnf
 from datasets import CNFDataset
 from models import LightningModelCNF
 
+def inspect_model_parameters(model, name="model", topk=20):
+    print(f"\n=== Parameter inspection: {name} ===")
+    total_params = 0
+    bad_tensors = []
+    stats = []
+
+    for n, p in model.named_parameters():
+        if p is None:
+            continue
+        total_params += p.numel()
+
+        finite_mask = torch.isfinite(p)
+        all_finite = finite_mask.all().item()
+
+        if not all_finite:
+            n_bad = (~finite_mask).sum().item()
+            bad_tensors.append((n, tuple(p.shape), n_bad))
+
+        # finite-only stats
+        pf = p[finite_mask]
+        if pf.numel() > 0:
+            pmin = pf.min().item()
+            pmax = pf.max().item()
+            pmean = pf.mean().item()
+            pstd = pf.std().item() if pf.numel() > 1 else 0.0
+            pabsmax = pf.abs().max().item()
+        else:
+            pmin = pmax = pmean = pstd = pabsmax = float("nan")
+
+        stats.append((n, tuple(p.shape), all_finite, pmean, pstd, pmin, pmax, pabsmax))
+
+    print(f"Total parameters: {total_params:,}")
+
+    if bad_tensors:
+        print("\n[!] Non-finite parameter tensors found:")
+        for n, shape, n_bad in bad_tensors:
+            print(f"  - {n:60s} shape={shape} nonfinite={n_bad}")
+    else:
+        print("[OK] All parameters are finite.")
+
+    # Show top tensors by absmax (good for spotting extreme layers)
+    stats_sorted = sorted(stats, key=lambda x: (float('-inf') if x[7] != x[7] else x[7]), reverse=True)
+
+    print(f"\nTop {min(topk, len(stats_sorted))} parameter tensors by |value| max:")
+    for row in stats_sorted[:topk]:
+        n, shape, all_finite, pmean, pstd, pmin, pmax, pabsmax = row
+        print(
+            f"{n:60s} shape={shape!s:18s} "
+            f"finite={all_finite} mean={pmean:+.3e} std={pstd:.3e} "
+            f"min={pmin:+.3e} max={pmax:+.3e} absmax={pabsmax:.3e}"
+        )
+
 def calc_exit_point(
     start_point: np.ndarray,
     direction: np.ndarray,
@@ -211,7 +263,7 @@ def generate_samples(model, labels, n_set, n_sample, device, min_charge, max_cha
             print(n)
         with torch.no_grad():
             generated_voxels = model.sample(labels, num_samples=n_sample)
-        #print(generated_voxels.shape)
+        print(generated_voxels.shape)
     
         generated_p_1 = generated_voxels[0]
 
@@ -219,9 +271,17 @@ def generate_samples(model, labels, n_set, n_sample, device, min_charge, max_cha
         generated_p_1 *= (max_charge - min_charge)
         generated_p_1 += min_charge
 
+        print("generated_p_1.shape =", generated_p_1.shape)
+        print("generated_p_1.min() =", generated_p_1.min())
+        print("generated_p_1.max() =", generated_p_1.max())
+        print("generated_p_1.mean() =", generated_p_1.mean())
+
         for s in range(n_sample):
             generated_p_s = generated_p_1[s]
-            generated_charge.append(generated_p_s.detach().cpu().numpy())
+            np_generated_p_s = generated_p_s.detach().cpu().numpy()
+            np_generated_p_s = np.exp(np_generated_p_s) - 1
+            #print(np_generated_p_s.min(), np_generated_p_s.max(), np_generated_p_s.mean())
+            generated_charge.append(np_generated_p_s)
             
     print(len(generated_charge))
     samples = np.array(generated_charge)
@@ -304,7 +364,7 @@ def get_sample_parameters(args, metadata, valid_params_folder_base, particle_typ
     else:
         exit_pos = None
 
-    if exit_pos is not None:
+    if 0: #exit_pos is not None:
         params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2], exit_pos[0], exit_pos[1], exit_pos[2]])
     else:
         params = np.array([ini_pos[0], ini_pos[1], ini_pos[2], ke, ini_dir[0], ini_dir[1], ini_dir[2]])
@@ -322,11 +382,11 @@ def Validate_Diffusion(particle_type = "proton_contained", particle = "proton", 
     args.dataset_path = "/pscratch/sd/b/botaoli/SFGD_VA/Data/NN_Data_compressed/{}/{}/{}/{}.zip"
     args.cnf_ind_path = "/pscratch/sd/b/botaoli/SFGD_VA/Data/NN_Data_compressed/gan_ind.pkl"
     args.save_dir = "/pscratch/sd/b/botaoli/SFGD_VA/Results/cnf/"
-    args.checkpoint_path = "/pscratch/sd/b/botaoli/SFGD_VA/Results/cnf/test_spline/checkpoints"
+    args.checkpoint_path = "/pscratch/sd/b/botaoli/SFGD_VA/Results/cnf/test_spline_noexiting_rotation/checkpoints_v2"
     args.checkpoint_name = args.particle
 
     if args.particle == "muon" or args.particle == "proton_exiting":
-        args.label_size = 10
+        args.label_size = 7
     elif args.particle == "proton_contained":
         args.label_size = 7
     args.epochs = 50
@@ -336,7 +396,7 @@ def Validate_Diffusion(particle_type = "proton_contained", particle = "proton", 
     args.num_workers = 64
 
     valid_params_folder_base = f"/pscratch/sd/b/botaoli/SFGD_VA/Data/genValid/{particle_type}/analysis_files"
-    output_plot_folder = f"/pscratch/sd/b/botaoli/SFGD_VA/Results/cnf/test_spline/plots/{particle_type}/{particle}_{sample_ind}"
+    output_plot_folder = f"/pscratch/sd/b/botaoli/SFGD_VA/Results/cnf/test_spline_noexiting_rotation/plots/{particle_type}/{particle}_{sample_ind}"
     os.makedirs(output_plot_folder, exist_ok=True)
     
     checkpoint_path = "/".join((args.checkpoint_path, args.particle, "train_loss","last.ckpt"))
@@ -355,7 +415,8 @@ def Validate_Diffusion(particle_type = "proton_contained", particle = "proton", 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model.eval()
-
+    
+    #inspect_model_parameters(model, name="model")
     ############################################################################################
     # Load the parameters for the sample
     ############################################################################################
@@ -384,6 +445,8 @@ def Validate_Diffusion(particle_type = "proton_contained", particle = "proton", 
     
     min_charge = 0
     max_charge = metadata['statistics']['per_tree'][particle_type]['recon_charge']['max']
+    max_charge = np.log(max_charge + 1)
+    print("max_charge =", max_charge)
 
     samples = generate_samples(model, labels, n_set, n_sample, device, min_charge, max_charge)
 
@@ -396,22 +459,30 @@ def Validate_Diffusion(particle_type = "proton_contained", particle = "proton", 
     
     for key, value in hit_charge.items():
         if hit_charge[key].size > 0:
-            max_charge = min(500, hit_charge[key].max())
-            plt.hist(hit_charge[key], bins=500, range=(0, max_charge), alpha=0.5, color="blue", density=True, label=f"data, n_hits: {len(hit_charge[key])}")
-            #add the number of events in the plot as label
-    
             generated_charge = samples[:,key[0],key[1],key[2]]
             generated_charge = generated_charge[generated_charge>5]
+            max_charge = min(1000, hit_charge[key].max()*1.1)
+            min_charge = max(0, hit_charge[key].min()*0.9)
+            if generated_charge.size > 0:
+                print(generated_charge.max())
+                print(hit_charge[key].max())
+                max_charge = min(1000, max(generated_charge.max()*1.1, hit_charge[key].max()*1.1))
+                min_charge = max(0, min(generated_charge.min()*0.9, hit_charge[key].min()*0.9))
+            plt.hist(hit_charge[key], bins=500, range=(min_charge, max_charge), alpha=0.5, color="blue", density=True, label=f"data, n_hits: {len(hit_charge[key])}")
+            #add the number of events in the plot as label
+    
+            if len(generated_charge) < 200:
+                print(generated_charge)
             #print(generated_charge)
-            plt.hist(generated_charge, bins=500, range=(0, max_charge), alpha=0.5, color="red", density=True, label=f"generated,n_hits: {len(generated_charge)}")
+            plt.hist(generated_charge, bins=500, range=(min_charge, max_charge), alpha=0.5, color="red", density=True, label=f"generated,n_hits: {len(generated_charge)}")
             plt.legend()
             plt.savefig(f"{output_plot_folder}/charge_distribution_{key}.png")
             plt.close() 
 
 def main():
     particle_dict = {
-        #"proton_contained": "proton",
-        #"muon": "muon",
+        "proton_contained": "proton",
+        "muon": "muon",
         "proton_exiting": "proton"
     }
     sample_ind = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

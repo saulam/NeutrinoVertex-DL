@@ -54,9 +54,11 @@ def plotly_generate(image, max_energy=1):
     N = int(max_energy) + 1  # Adjust N to your desired range
     values = np.linspace(0, N, num=N)
     colors = [rgb_to_hex(custom_cmap(value / N)) for value in values]
+    print(len(colors))
 
     # Create a mesh3d trace for each voxel (cube)
     for x, y, z in zip(x1, y1, z1):
+        print(int(image[x, y, z]))
         cube = go.Mesh3d(
             x=[x, x, x + cube_size, x + cube_size, x, x, x + cube_size, x + cube_size],
             y=[y, y + cube_size, y + cube_size, y, y, y + cube_size, y + cube_size, y],
