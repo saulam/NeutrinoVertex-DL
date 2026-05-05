@@ -31,7 +31,8 @@ class FitParams(nn.Module):
         dir /= (dir.norm(dim=-1, keepdim=True) + 1e-6)
         dir[:init_dir.shape[0]] = self.init_dir
 
-        self.dir = nn.Parameter(dir)
+        #self.dir = nn.Parameter(dir)
+        self.dir = dir
 
         self.E_mean = E_mean
         self.E_std = E_std
@@ -40,9 +41,11 @@ class FitParams(nn.Module):
         ekin = torch.randn(n_max, 1, device=device, dtype=dtype)
         ekin[:init_ekin.shape[0]] = init_ekin.to(device, dtype)
         self.ekin = nn.Parameter(ekin)
-
         # vertex parameters
-        self.vtx = nn.Parameter(init_vtx.to(device, dtype))
+        #self.vtx = nn.Parameter(init_vtx.to(device, dtype))
+        # fix vertex, no parameter
+        self.vtx = init_vtx.to(device, dtype)
+
        
         # track weights if more_particles is True
         if more_particles:
@@ -75,6 +78,7 @@ class FitParams(nn.Module):
 
         ekin = softplus(self.ekin * self.E_std + self.E_mean)
         ekin = (ekin - self.E_mean) / self.E_std
+        #ekin = self.ekin
 
         return {
             "dir": dir,

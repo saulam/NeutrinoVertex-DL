@@ -22,7 +22,7 @@ class TrackGenerator:
     def render(self,
         labels: torch.Tensor,
         z: torch.Tensor = None,
-        n_sample_for_template: int = 128,
+        n_sample_for_template: int = 1,
     ) -> torch.Tensor:
         """
         Render a particle image from the given labels and noise.
@@ -33,8 +33,8 @@ class TrackGenerator:
         parameters = labels
         max_charge = np.log(self.metadata['statistics']['per_tree'][self.args.particle]['recon_charge']['max'] + 1)
         min_charge = np.log(1)
-        print("TrackGenerator parameters shape: ", parameters.shape)
-        print("TrackGenerator parameters: ", parameters)
+        # print("TrackGenerator parameters shape: ", parameters.shape)
+        # print("TrackGenerator parameters: ", parameters)
         # if self.args.particle == "muon" or self.args.particle == "proton_exiting":
         #     parameters = normalize_parameters(parameters, self.args, self.metadata, self.args.particle)
         #     print("TrackGenerator parameters after normalization: ", parameters)
@@ -54,10 +54,10 @@ class TrackGenerator:
 
         generated_voxels = torch.exp(generated_voxels) - 1
         
-        print("generated_voxels: ", generated_voxels)
-        print("generated_voxels min: ", generated_voxels.min())
-        print("generated_voxels max: ", generated_voxels.max())
-        print("generated_voxels mean: ", generated_voxels.mean())
+        # print("generated_voxels: ", generated_voxels)
+        #print("generated_voxels min: ", generated_voxels.min())
+        #print("generated_voxels max: ", generated_voxels.max())
+        #print("generated_voxels mean: ", generated_voxels.mean())
         # average over the sample dimension
         generated_voxels = torchutils.split_leading_dim(generated_voxels, shape=[-1, n_sample_for_template])
         generated_voxels = generated_voxels.mean(dim=1)

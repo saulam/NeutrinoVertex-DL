@@ -25,7 +25,7 @@ class FitConfig:
     gamma_drift: float = 1e-2    # energy drift (optional)
 
     # optimization
-    adam_lr: float = 5e-2
+    adam_lr: float = 5e-3
     adam_steps: int = 100
     lbfgs_steps: int = 50
     use_lbfgs: bool = False
@@ -36,8 +36,8 @@ class FitConfig:
     merge_angle_deg: float = 5.0
 
     # number of samples for template
-    n_sample_for_template: int = 64
-
+    n_sample_for_template: int = 1
+    n_fit_per_event: int = 1
     # background
     background_mode: str = "none"  # "scalar" or "map" or "none"
 

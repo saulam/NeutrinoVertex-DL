@@ -1,9 +1,9 @@
 import torch
-
-from typing import Dict
+import numpy as np
+from typing import Dict, List
 
 from model_wrappers import TrackGenerator, VertexTransformer
-from fit import fit_vertex_event
+from fit import fit_vertex_event, fit_single_track
 
 class FlowGenerator(TrackGenerator):
     def __init__(self, flow):
@@ -33,10 +33,15 @@ class VertexFitter:
 
 
     def fit(self,
-        x: torch.Tensor,batch_idx: int
+        dataset: Dict[str, List[np.ndarray]],n_events: int,
+        fit_type: str = "event", particle: str = "proton_contained"
     ) -> Dict[str, torch.Tensor]:
-        dataset = self.model_loader.load_sample_data(batch_idx)
+        x = torch.tensor(dataset['hits'][:n_events], device=self.cfg.device, dtype=self.cfg.dtype)
         # keep only the first event
-        dataset = {k: torch.tensor(v[0], device=self.cfg.device, dtype=self.cfg.dtype) for k, v in dataset.items()}
-        return fit_vertex_event(x, self.model_loader, self.cfg, dataset)
+        dataset = {k: v[:n_events] for k, v in dataset.items()}
+
+        if fit_type == "event":
+            return fit_vertex_event(x, self.model_loader, self.cfg, dataset)
+        elif fit_type == "single_track":
+            return fit_single_track(x, self.model_loader, self.cfg, dataset, particle)
 

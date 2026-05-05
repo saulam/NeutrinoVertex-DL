@@ -165,8 +165,8 @@ class CNFDataset(Dataset):
         # print("pos_ini_mod: ", pos_ini_mod)
         # print("pos_ini: ", pos_ini)
         # print("pos_end: ", pos_end)
-
-        hit_x, hit_y, hit_z, pos_ini_mod, inidir = self.apply_rotation_or_flip(hit_x, hit_y, hit_z, pos_ini_mod, inidir)
+        if self.split == "train":
+            hit_x, hit_y, hit_z, pos_ini_mod, inidir = self.apply_rotation_or_flip(hit_x, hit_y, hit_z, pos_ini_mod, inidir)
 
         mask = (
                   (hit_x >= -max_extend) & (hit_x <= max_extend)
@@ -202,7 +202,10 @@ class CNFDataset(Dataset):
         # Reconstruct the image to a (self.va_size-2)x(self.va_size-2)x(self.va_size-2) flat volume
         #dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
         #dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
-        dense_image = np.random.rand(self.va_size, self.va_size, self.va_size)
+        if self.split == "train":
+            dense_image = np.random.rand(self.va_size, self.va_size, self.va_size)
+        else:
+            dense_image = np.zeros(shape=(self.va_size, self.va_size, self.va_size))
         dense_image[hit_x_ind[:], hit_y_ind[:], hit_z_ind[:]] = hit_q_val[:]
         boundary_size = self.va_size//2 - self.img_size//2
         output['image'] = dense_image[boundary_size:-boundary_size, boundary_size:-boundary_size, boundary_size:-boundary_size].reshape(-1)

@@ -33,7 +33,7 @@ def args_transformer(version=1):
     parser.add_argument("--mom_smearing_p", type=float, default=0.07, help="momentum smearing for protons exiting")
     parser.add_argument("--mom_smearing_mu", type=float, default=0.07, help="direction smearing for protons exiting")
     
-
+    parser.add_argument("--n_MPPC_Pixel", type=int, default=2668, help="number of MPPC pixels")
     parser.add_argument("--cube_size", type=float, default=10.27, help="cube size in mm")
     parser.add_argument("--va_size", type=int, default=7, help="VA region size in cubes")
     parser.add_argument("--pad_value", type=int, default=-10000, help="VA region size in cubes")
@@ -91,6 +91,7 @@ def args_gan():
 
     parser.add_argument("--name", type=str, default="v1", help="model name")
 
+    parser.add_argument("-nmppc", "--n_MPPC_Pixel", type=int, default=2668, help="number of MPPC pixels")
     parser.add_argument("-va", "--va_size", type=int, default=7, help="VA region size in cubes")
     parser.add_argument("-cp", "--cube_size", type=float, default=10.27, help="cube size in mm")
     parser.add_argument("-pd", "--pad_value", type=int, default=-10000, help="pad value")
@@ -141,6 +142,7 @@ def args_cnf():
 
     parser.add_argument("--name", type=str, default="v1", help="model name")
 
+    parser.add_argument("-nmppc", "--n_MPPC_Pixel", type=int, default=2668, help="number of MPPC pixels")
     parser.add_argument("-va", "--va_size", type=int, default=7, help="VA region size in cubes")
     parser.add_argument("-cp", "--cube_size", type=float, default=10.27, help="cube size in mm")
     parser.add_argument("-pd", "--pad_value", type=int, default=-10000, help="pad value")

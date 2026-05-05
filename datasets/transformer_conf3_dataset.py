@@ -25,7 +25,7 @@ class TransformerConf3Dataset(Dataset):
         self.max_p_exiting = args.max_p_exiting
         self.split = split
         self.total_events = self.__len__()
-        self.cube_shift = 1
+        self.cube_shift = 0
         self.cube_size = args.cube_size
         self.va_size = args.va_size
         self.pad_value = args.pad_value
